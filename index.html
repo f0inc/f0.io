@@ -6,71 +6,102 @@
 <title>f0</title>
 <meta name="description" content="We've been building and running voice AI agents in production since 2020. Now we're turning everything we've learned into the best voice agent in the world.">
 <meta property="og:title" content="f0">
-<meta property="og:description" content="The best voice agent in the world. $0.01 a minute, LLM included. Ready soon.">
+<meta property="og:description" content="The best voice agent in the world. $0.01 a minute, LLM included.">
 <meta property="og:url" content="https://f0.io">
-<meta name="theme-color" content="#faf8f3">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1a18'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='17' fill='%23faf8f3' text-anchor='middle'%3Ef0%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f6f6f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161616" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="preload" href="fonts/GT-Alpina-Standard-Medium.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/GT-America-Standard-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  :root { --bg: #faf8f3; --ink: #1a1a18; --muted: #5f5c55; --rule: #d9d5ca; }
+  @font-face { font-family: "GT Alpina"; src: url("fonts/GT-Alpina-Standard-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: "GT America"; src: url("fonts/GT-America-Standard-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: "GT America"; src: url("fonts/GT-America-Standard-Regular-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+  @font-face { font-family: "GT America"; src: url("fonts/GT-America-Standard-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+  /* follows the system: a very light neutral grey, or a soft near-black */
+  :root { color-scheme: light dark; --bg: #f6f6f6; --ink: #121212; --muted: #5e5e5e; --rule: #dadada; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --ink: #f2f2f2; --muted: #9b9b9b; --rule: #303030; } }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font-family: "Newsreader", Georgia, serif; font-size: 21px; line-height: 1.6;
+    font-family: "GT America", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 19px; line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 580px; margin: 0 auto; padding: 120px 24px 96px; display: flex; flex-direction: column; gap: 32px; }
-  .logo { font-size: 28px; font-weight: 500; letter-spacing: -0.01em; }
+  /* one column, anchored to the left edge of the page */
+  main { box-sizing: content-box; max-width: 730px; margin: 0; padding: 72px 24px 96px clamp(24px, 7vw, 112px); display: flex; flex-direction: column; gap: 28px; }
+  /* wordmark: black f sitting over a 0 painted in tiny dabs (brush.js paints it; the gradient is the fallback) */
+  .logo { margin: 0 0 12px; font-family: "GT Alpina", Georgia, serif; font-size: 68px; font-weight: 500; line-height: 1; letter-spacing: 0; }
+  .logo { cursor: default; -webkit-user-select: none; user-select: none; }   /* a mark, not text: no text cursor, no selection */
+  .logo .eff { position: relative; z-index: 1; }
+  .logo .zero {
+    position: relative; z-index: 0; margin-left: -0.04em;
+    background: conic-gradient(from 200deg at 50% 52%, #33509e, #5a3f93, #b5446e, #d9773a, #dcb043, #6f9f52, #1f8a86, #33509e) no-repeat;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .logo .zero.painted { background-size: 100% 78%; background-position: 0 54.5%; }
   p { margin: 0; }
   ul { margin: 0; }
   .attrs { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
   strong { font-weight: 500; }
-  .soon { font-style: italic; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .signup { display: flex; flex-wrap: wrap; gap: 8px; max-width: 480px; }
+  .signup input { flex: 1 1 220px; min-width: 0; height: 44px; padding: 0 12px; font: inherit; font-size: 16px; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 6px; }
+  .signup input::placeholder { color: var(--muted); }
+  .signup input:focus-visible, .signup button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  /* the button has its own small painting, a rainbow spiral (brush.js sets --paint; the gradient is the fallback).
+     It sits on a square layer behind the label so it can turn: slowly on hover, faster for a moment on click. */
+  .signup button { position: relative; overflow: hidden; flex: none; height: 44px; padding: 0 20px; font: inherit; font-size: 16px; font-weight: 500; color: #fff; border: 0; border-radius: 6px; cursor: pointer; background: #5a3f93; }
+  .signup .paint { position: absolute; left: 50%; top: 50%; width: 160%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    background: linear-gradient(rgba(0,0,0,.16), rgba(0,0,0,.16)), var(--paint, conic-gradient(from 40deg, #1f8a86, #33509e, #5a3f93, #b5446e, #d9773a, #dcb043, #6f9f52, #1f8a86)) center / cover no-repeat; }
+  /* a crisp grey edge outside the letters: a second copy of the label sits behind the real one and carries
+     the outline, so the outline can never cover the white letters and nothing is blurred */
+  .signup .lbl { position: relative; z-index: 1; display: inline-block; white-space: nowrap; }
+  .signup .lbl::before { content: attr(data-t); position: absolute; left: 0; top: 0; z-index: -1; color: transparent; -webkit-text-stroke: 2px rgba(90,90,90,.6); }
+  .signup button:hover { filter: brightness(1.08); }
+  .signup button, .signup button *, .signup button *::before { cursor: pointer !important; }
   a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-  hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0 0; width: 100%; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 28px 0 0; width: 100%; }
   section { display: flex; flex-direction: column; gap: 10px; }
-  h2 { margin: 0; font-size: 14px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  h2 { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .links { padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
   .links span { color: var(--muted); }
   a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-  a:hover { color: #5a5a55; }
-  @media (max-width: 480px) { main { padding-top: 72px; } body { font-size: 19px; } }
+  a:hover { color: var(--muted); }
+  @media (max-width: 480px) { main { padding-top: 48px; } body { font-size: 17px; } .logo { font-size: 56px; } }
 </style>
 </head>
 <body>
 <main>
-  <div class="logo">f0</div>
+  <h1 class="logo" aria-label="f0"><span class="eff" aria-hidden="true">f</span><span class="zero" aria-hidden="true">0</span></h1>
 
-  <p>We've been building and running voice AI agents in production since 2020. Now we're turning everything we've learned into the best voice agent in the world. It will be:</p>
+  <p>We've been building and running voice AI agents in production since 2020.</p>
+  <p>Now we're turning everything we've learned into the best voice agent in the world.</p>
 
   <ul class="attrs">
-    <li><strong>Easy to program</strong>: precise business rules, not fuzzy prompts</li>
     <li><strong>Great to talk to</strong></li>
+    <li><strong>Easy to program</strong> with precise business rules</li>
     <li><strong>$0.01 a minute</strong>, LLM included</li>
   </ul>
 
-  <p class="soon">Ready soon.</p>
+  <!-- mock: not connected to anything yet -->
+  <form class="signup" onsubmit="return false">
+    <label class="vh" for="email">Email</label>
+    <input id="email" type="email" name="email" placeholder="you@company.com" autocomplete="email">
+    <button type="submit"><span class="paint" aria-hidden="true"></span><span class="lbl" data-t="Sign up for early access">Sign up for early access</span></button>
+  </form>
 
   <hr>
 
   <section>
     <h2>Publications</h2>
     <ul class="links">
-      <li><a href="#">Backchannel</a> <span>· daily digest of what matters in voice AI</span></li>
-      <li><a href="#">vaux</a> <span>· voice agent benchmark</span></li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Tools</h2>
-    <ul class="links">
-      <li><a href="#">whichtts</a> <span>· find the right TTS for your use case</span></li>
-      <li><a href="#">speechswitch</a> <span>· one SDK for every speech model</span></li>
+      <li><a href="#">backchannel</a> <span>· daily breakdown of what happened in voice AI</span></li>
+      <li><a href="#">vaux</a> <span>· voice AI agent UX benchmark</span></li>
     </ul>
   </section>
 </main>
+<script src="brush.js" defer></script>
 </body>
 </html>

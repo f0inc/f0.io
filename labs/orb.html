@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>f0 Orb</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one large square stage on paper, a short control column beside it; stacks on phones. Single light theme on purpose: the paint is made for paper. */
+  :root { --bg: #faf8f3; --ink: #1a1a18; --muted: #6a665e; --rule: #dcd7cb; --chip: #efebe1; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; --serif: "Newsreader", Georgia, serif; }
+  /* GT Alpina trial, internal evaluation only */
+  @font-face { font-family: 'AlpinaM'; src: url("../fonts/GT-Alpina-Standard-Medium.woff2") format('woff2'); font-weight: 500; font-display: block; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: var(--mono); font-size: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; align-items: start; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+  .stage { position: relative; }
+  #c { display: block; width: 100%; aspect-ratio: 1; max-width: 100%; }
+  .tag { position: absolute; left: 0; top: 0; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-size: 11px; }
+  .sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; padding-top: 16px; border-top: 1px solid var(--rule); }
+  .sizes figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+  .sizes canvas { display: block; }
+  aside { display: flex; flex-direction: column; gap: 20px; }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0; }
+  .lede { color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 8px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { font: inherit; border: 1px solid var(--rule); background: var(--chip); color: var(--ink); padding: 6px 10px; border-radius: 3px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <div>
+    <div class="stage"><canvas id="c" aria-label="The f0 orb: a ring of paint that is always being repainted"></canvas><div class="tag" id="tag">idle</div></div>
+    <div class="sizes">
+      <figure><canvas id="s20" width="20" height="20"></canvas>20</figure>
+      <figure><canvas id="s32" width="32" height="32"></canvas>32</figure>
+      <figure><canvas id="s64" width="64" height="64"></canvas>64</figure>
+      <figure><canvas id="s128" width="128" height="128"></canvas>128</figure>
+    </div>
+  </div>
+  <aside>
+    <div>
+      <h1>Orb</h1>
+      <p class="lede">The 0 of f0, painted live. One brush stroke goes round and round: full where the brush is, thinning away behind it. Listening and speaking, the ring closes; speaking, it swells with the voice.</p>
+    </div>
+    <fieldset><legend>State</legend>
+      <div class="seg" id="states">
+        <button data-state="idle" aria-pressed="true">Idle</button>
+        <button data-state="listening" aria-pressed="false">Listening</button>
+        <button data-state="thinking" aria-pressed="false">Thinking</button>
+        <button data-state="speaking" aria-pressed="false">Speaking</button>
+      </div>
+    </fieldset>
+    <fieldset><legend>Shape</legend>
+      <div class="seg" id="shapes">
+        <button data-shape="zero" aria-pressed="true">The 0</button>
+        <button data-shape="ring" aria-pressed="false">Circle</button>
+      </div>
+    </fieldset>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const hex = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const sn = (u, s) => (Math.sin(u + s) * 0.5 + Math.sin(u * 1.618 + s * 2.3) * 0.3 + Math.sin(u * 2.718 + s * 3.7) * 0.2);
+  const H2 = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const TAU = Math.PI * 2, BG = '#faf8f3', WHITE = [251, 246, 233], DEEP = [36, 28, 84];
+
+  // ---------- paint: the same quiet brush as the wordmark ----------
+  const PAL7 = ['#b5446e', '#d9773a', '#dcb043', '#6f9f52', '#1f8a86', '#33509e', '#5a3f93'].map(hex), PAL = [];
+  for (let i = 0; i < 21; i++) PAL.push(mix(PAL7[Math.floor(i / 3)], PAL7[(Math.floor(i / 3) + 1) % 7], (i % 3) / 3));
+  const at = j => PAL[((j % 21) + 21) % 21];
+  const R0 = 40, TL = 0.5, CX = 38, CS = 48, SOFT = 0.45, tips = new Map();
+  function tip(j, v) {                           // one press of the brush: a soft body plus bristle marks
+    const key = (((j % 21) + 21) % 21) * 2 + v; let c = tips.get(key); if (c) return c;
+    c = document.createElement('canvas'); c.width = CX * 2; c.height = CS * 2; const g = c.getContext('2d');
+    const base = at(j), tv = (H2(j, v * 3.3) - 0.5) * 0.3 * SOFT, body = tv > 0 ? mix(base, WHITE, tv) : mix(base, DEEP, -tv);
+    g.translate(CX, CS);
+    g.save(); g.scale(TL * 0.92, 0.86); const bg = g.createRadialGradient(0, 0, 0, 0, 0, R0);
+    bg.addColorStop(0, rgba(body, 0.96)); bg.addColorStop(0.78, rgba(body, 0.94)); bg.addColorStop(1, rgba(body, 0)); g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R0, 0, 7); g.fill(); g.restore();
+    for (let m = 0; m < 5; m++) {
+      const q = n => H2(m * 5.1 + j * 1.9 + n, v * 7.3 + n * 0.61), rad = Math.sqrt(q(1)) * 0.7, th = q(2) * TAU, rr = (0.26 + q(3) * 0.26) * R0, w = q(4);
+      const col = w < 0.4 ? mix(base, at(j + 3), 0.6) : w < 0.7 ? mix(base, at(j - 3), 0.6) : w < 0.87 ? mix(base, WHITE, 0.4) : mix(base, DEEP, 0.3), al = (0.4 + q(6) * 0.3) * SOFT;
+      g.save(); g.translate(rad * Math.cos(th) * TL * R0, rad * Math.sin(th) * R0 * 0.85); g.scale(TL, 0.42);
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, al)); gr.addColorStop(0.55, rgba(col, al * 0.8)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+    }
+    for (let k = 0; k < 70; k++) {
+      const r = n => H2(k * 1.37 + 11 + v * 5, n * 9.1 + j * 0.3), rad = Math.sqrt(r(1)), th = r(2) * TAU, kr = r(3);
+      let col = mix(base, at(j + (r(6) > 0.5 ? 3 : -3)), Math.abs(r(6) - 0.5) * 0.84 * SOFT);
+      col = kr < 0.16 ? mix(col, WHITE, (0.32 + r(9) * 0.38) * SOFT) : kr < 0.27 ? mix(col, DEEP, (0.25 + r(9) * 0.3) * SOFT) : (r(7) > 0.5 ? mix(col, WHITE, (r(7) - 0.5) * 0.54 * SOFT) : mix(col, DEEP, (0.5 - r(7)) * 0.4 * SOFT));
+      const rr = (0.05 + r(4) * 0.09) * R0, a = 0.55 + r(5) * 0.45;
+      g.save(); g.translate(rad * Math.cos(th) * TL * R0 * 0.8, rad * Math.sin(th) * R0); g.scale(2.6, 1);
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, a)); gr.addColorStop(0.5, rgba(col, a * 0.85)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+    }
+    tips.set(key, c); return c;
+  }
+  // the painting lives on its own canvas and is never cleared: new strokes go over old ones
+  const PS = 720, paint = document.createElement('canvas'); paint.width = paint.height = PS; const pg = paint.getContext('2d');
+  let nStroke = 0;
+  function stroke(x, y, dir, len, hw, j) {      // one short touch of the brush, in units where the canvas is 2 wide
+    const id = nStroke++, bend = (H2(id, 4.7) - 0.5) * 0.5, v = H2(id, 1.7) < 0.5 ? 0 : 1, sp = Math.max(1.1 / (PS / 2), 0.05 * hw), n = Math.ceil(len / sp), sprite = tip(j, v);
+    let px = x - Math.cos(dir) * len / 2, py = y - Math.sin(dir) * len / 2;
+    for (let i = 0; i <= n; i++) {
+      const q = i / n, a = dir + bend * (q - 0.5), sc = hw * (0.82 + 0.3 * Math.sin(Math.PI * Math.min(1, q * 1.4))) * (PS / 2) / R0, c = Math.cos(a) * sc, s = Math.sin(a) * sc;
+      pg.globalAlpha = q > 0.78 ? (1 - q) / 0.22 : 1; pg.setTransform(c, s, -s, c, PS / 2 + px * PS / 2, PS / 2 + py * PS / 2); pg.drawImage(sprite, -CX, -CS);
+      px += Math.cos(a) * len / n; py += Math.sin(a) * len / n;
+    }
+  }
+
+  // ---------- shape ----------
+  // "The 0" is the real 0 of GT Alpina: its outline is measured from the font, as a centre
+  // line and a thickness at each angle. Until the font has loaded, an ellipse stands in.
+  const GN = 360, GC = new Float32Array(GN), GH = new Float32Array(GN);
+  for (let i = 0; i < GN; i++) { const th = i / GN * TAU, c = Math.cos(th), s2 = Math.sin(th); GC[i] = 0.225 * 0.335 / Math.hypot(0.335 * c, 0.225 * s2); GH[i] = 0.036 * (1 + 0.75 * c * c); }
+  function sampleGlyph() {
+    const S2 = 640, c = document.createElement('canvas'); c.width = c.height = S2; const g = c.getContext('2d', { willReadFrequently: true });
+    g.font = "500 460px 'AlpinaM'"; const m = g.measureText('0'), gh = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent, gw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+    if (!(gh > 50)) return false;
+    g.fillText('0', S2 / 2 - gw / 2 + m.actualBoundingBoxLeft, S2 / 2 + gh / 2 - m.actualBoundingBoxDescent);
+    const d = g.getImageData(0, 0, S2, S2).data, u = 0.67 / gh;
+    for (let i = 0; i < GN; i++) { const th = i / GN * TAU, cx = Math.cos(th), cy = Math.sin(th); let rin = -1, rout = -1;
+      for (let r = 2; r < S2 / 2 - 1; r += 0.5) { const a = d[((Math.round(S2 / 2 + cy * r) * S2) + Math.round(S2 / 2 + cx * r)) * 4 + 3]; if (a > 128) { if (rin < 0) rin = r; rout = r; } }
+      if (rin < 0) return false; GC[i] = (rin + rout) / 2 * u; GH[i] = Math.max(0.006, (rout - rin) / 2 * u); }
+    return true;
+  }
+  const tab = (T, th) => { const f = ((th / TAU) % 1 + 1) % 1 * GN, i = Math.floor(f), q = f - i; return T[i % GN] * (1 - q) + T[(i + 1) % GN] * q; };
+  const shp = { zw: 1 }; let shape = 'zero';
+  const rcAt = th => 0.3 + (tab(GC, th) - 0.3) * shp.zw, hAt = th => 0.046 + (tab(GH, th) - 0.046) * shp.zw;
+  const curve = (th, k = 1) => { const r = rcAt(th) * k, dr = (rcAt(th + 0.02) - rcAt(th - 0.02)) / 0.04 * k, c = Math.cos(th), s2 = Math.sin(th);
+    const tx = dr * c - r * s2, ty = dr * s2 + r * c, l = Math.hypot(tx, ty); return [r * c, r * s2, ty / l, -tx / l]; };
+  let drift = Math.random() * 21;
+  function lay(th) {                             // lay one stroke somewhere across the band at angle th
+    const [x, y, nx, ny] = curve(th), off = (Math.random() * 2 - 1) * 0.15, hw = 0.022 + Math.random() * 0.012;
+    let dir = Math.atan2(nx, -ny) + (Math.random() - 0.5) * 0.9; if (Math.random() < 0.5) dir += Math.PI;
+    stroke(x + nx * off, y + ny * off, dir, hw * (2.2 + Math.random() * 1.6), hw, Math.round(th / TAU * 21 + drift + (Math.random() - 0.5) * 1.6));
+  }
+  function prime() { pg.setTransform(1, 0, 0, 1, 0, 0); pg.globalAlpha = 1; pg.clearRect(0, 0, PS, PS); for (let i = 0; i < 520; i++) lay(i / 520 * TAU * 2 + Math.random() * 0.2); }
+
+  // ---------- state ----------
+  const STATES = ['idle', 'listening', 'thinking', 'speaking'];
+  const LOOK = { // brush speed (rad/s), strokes per second, lump where the brush is, radius scale, thickness scale, breathing, share of the ring in paint
+    idle:      { w: 0.5, rate: 24, lump: 0.3,  R: 1,    T: 1,    br: 0.035, cov: 0.8 },
+    listening: { w: 0.12, rate: 8, lump: 0.1,  R: 0.9,  T: 1.12, br: 0.07,  cov: 1 },
+    thinking:  { w: 2.3, rate: 85, lump: 0.75, R: 1,    T: 0.95, br: 0.02,  cov: 0.5 },
+    speaking:  { w: 0.9, rate: 40, lump: 0.3,  R: 1.03, T: 1.05, br: 0.02,  cov: 1 },
+  };
+  const wgt = { idle: 1, listening: 0, thinking: 0, speaking: 0 }, cur = { ...LOOK.idle };
+  let state = 'idle', t = 0, head = Math.random() * TAU, acc = 0, env = 0, envS = 0;
+  let syl = 0, sylDur = 0.2, sylAmp = 0, phraseLeft = 2, pause = 0;
+  function speech(dt) { if (pause > 0) { pause -= dt; return 0; } syl += dt;
+    if (syl >= sylDur) { syl = 0; sylDur = 0.12 + Math.random() * 0.18; sylAmp = 0.35 + Math.random() * 0.65; phraseLeft -= sylDur; if (phraseLeft <= 0) { phraseLeft = 1.2 + Math.random() * 2.6; pause = 0.25 + Math.random() * 0.6; return 0; } }
+    return sylAmp * Math.pow(Math.sin(Math.PI * syl / sylDur), 1.4); }
+  const bulges = [];                             // speaking: the ring swells in a few places, not all over
+  function step(dt) {
+    t += dt; const e = 1 - Math.exp(-dt * 1.6);
+    for (const s of STATES) wgt[s] += ((s === state ? 1 : 0) - wgt[s]) * e;
+    for (const k in cur) { let v = 0; for (const s of STATES) v += wgt[s] * LOOK[s][k]; cur[k] = v; }
+    shp.zw += ((shape === 'zero' ? 1 : 0) - shp.zw) * (1 - Math.exp(-dt * 3));
+    const raw = state === 'speaking' ? speech(dt) : (pause = 0, 0);
+    env += (raw - env) * (1 - Math.exp(-dt * (raw > env ? 30 : 9))); envS += (env - envS) * (1 - Math.exp(-dt * 3));
+    if (Math.random() < 7 * env * dt && bulges.length < 7) bulges.push({ th: Math.random() * TAU, amp: 0.5 + Math.random() * 1.1, w: 0.3 + Math.random() * 0.45, level: 0, life: 0, dur: 0.35 + Math.random() * 0.5 });
+    for (let i = bulges.length - 1; i >= 0; i--) { const b = bulges[i]; b.life += dt; const up = b.life < b.dur; b.level += ((up ? b.amp * (0.4 + env) : 0) - b.level) * (1 - Math.exp(-dt * (up ? 14 : 4.5))); if (!up && b.level < 0.01) bulges.splice(i, 1); }
+    head += cur.w * dt; drift += dt * 0.12;
+    // paint: mostly where the brush is, and while speaking also where the ring swells
+    acc += cur.rate * dt; while (acc >= 1) { acc -= 1; lay(head + gauss() * 0.14); }
+    for (const b of bulges) if (Math.random() < b.level * 30 * dt) lay(b.th + gauss() * b.w * 0.5);
+  }
+  // noise that joins up with itself round the ring
+  const pn = (th, u, sd) => 0.5 * Math.sin(2 * th + u + sd) + 0.3 * Math.sin(3 * th - u * 1.3 + sd * 2.1) + 0.2 * Math.sin(5 * th + u * 0.7 + sd * 3.3);
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  function thick(th) {                           // [outward, inward] half-thickness at an angle
+    const base = hAt(th) * cur.T * (1 + 0.06 * pn(th, t * 0.4, 3.1));
+    const dh = wrap(th - head), lump = cur.lump * Math.exp(-dh * dh / 0.5);
+    let bo = 0; for (const b of bulges) { const d = wrap(th - b.th); bo += b.level * Math.exp(-d * d / (b.w * b.w)); }
+    // soft ceiling, so a swell never outgrows the band of paint behind it
+    const cap = (v, m) => m * (1 - Math.exp(-v / m));
+    return [cap(base * (1 + lump + bo * 1.2), 0.125), cap(base * (1 + lump * 0.8 + bo * 0.4), 0.09)];
+  }
+
+  // ---------- draw ----------
+  let W = 1;
+  function resize() { const dpr = Math.min(2, window.devicePixelRatio || 1); W = Math.min(1200, Math.max(60, Math.round(cv.clientWidth * dpr))); cv.width = cv.height = W; }
+  const previews = ['s20', 's32', 's64', 's128'].map(id => { const c = document.getElementById(id), css = c.width; c.style.width = c.style.height = css + 'px'; c.width = c.height = Math.round(css * Math.min(2, window.devicePixelRatio || 1)); return c; });
+  const VIEW = 0.52, N = 200, out = new Float32Array(N * 2), inn = new Float32Array(N * 2);
+  function draw() {
+    const k = W / 2 / VIEW, breath = 1 + cur.br * Math.sin(t * 1.5), R = cur.R * breath * (1 + envS * 0.03);
+    for (let i = 0; i < N; i++) { const th = i / N * TAU, [x, y, nx, ny] = curve(th, R * (1 + 0.012 * pn(th, -t * 0.5, 7.7))), [ho, hi] = thick(th);
+      out[i * 2] = x + nx * ho; out[i * 2 + 1] = y + ny * ho; inn[i * 2] = x - nx * hi; inn[i * 2 + 1] = y - ny * hi; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, W);
+    ctx.save(); ctx.setTransform(k, 0, 0, k, W / 2, W / 2); ctx.beginPath();
+    const cov = cur.cov;
+    if (cov > 0.985) {                           // the whole ring is in paint
+      for (const a of [out, inn]) { ctx.moveTo(a[0], a[1]); for (let i = 1; i < N; i++) ctx.lineTo(a[i * 2], a[i * 2 + 1]); ctx.closePath(); }
+    } else {
+      // one brush stroke: full and round where the brush is, thinning to nothing behind it
+      const Lang = cov * TAU, M = Math.max(24, Math.round(N * cov)), keep = Math.min(1, Math.max(0, (cov - 0.85) / 0.135)), po = [], pi = [];
+      const rk = th => R * (1 + 0.012 * pn(th, -t * 0.5, 7.7));
+      for (let i = 0; i <= M; i++) { const d = Lang * (1 - i / M), th = head - d, tp0 = Math.pow(Math.min(1, (Lang - d) / (Lang * 0.6)), 0.8), tp = tp0 + (1 - tp0) * keep * keep;
+        const [x, y, nx, ny] = curve(th, rk(th)), [ho, hi] = thick(th); po.push(x + nx * ho * tp, y + ny * ho * tp); pi.push(x - nx * hi * tp, y - ny * hi * tp); }
+      ctx.moveTo(po[0], po[1]); for (let i = 1; i <= M; i++) ctx.lineTo(po[i * 2], po[i * 2 + 1]);
+      const [x, y, nx, ny] = curve(head, rk(head)), [ho, hi] = thick(head), tx = -ny, ty = nx, sgn = 1;
+      for (let q = 1; q < 12; q++) { const ph = q / 12 * Math.PI, r = ho + (hi - ho) * q / 12, f = (ho + hi) / 2 * Math.sin(ph) * sgn; ctx.lineTo(x + nx * r * Math.cos(ph) * (q < 6 ? 1 : hi / r * r / hi) + tx * f, y + ny * r * Math.cos(ph) + ty * f); }
+      for (let i = M; i >= 0; i--) ctx.lineTo(pi[i * 2], pi[i * 2 + 1]);
+      ctx.closePath();
+    }
+    ctx.clip('evenodd'); ctx.drawImage(paint, -1, -1, 2, 2); ctx.restore();
+    const crop = W * 0.86, o = (W - crop) / 2;
+    for (const p of previews) p.getContext('2d').drawImage(cv, o, o, crop, crop, 0, 0, p.width, p.height);
+  }
+
+  const tag = document.getElementById('tag');
+  document.querySelectorAll('#states button').forEach(b => b.addEventListener('click', () => { state = b.dataset.state; tag.textContent = state; document.querySelectorAll('#states button').forEach(o => o.setAttribute('aria-pressed', o === b)); }));
+  document.querySelectorAll('#shapes button').forEach(b => b.addEventListener('click', () => { shape = b.dataset.shape; document.querySelectorAll('#shapes button').forEach(o => o.setAttribute('aria-pressed', o === b)); prime2(); }));
+  // changing shape moves the band the brush paints in, so fill the new band straight away
+  function prime2() { const z0 = shp.zw; shp.zw = shape === 'zero' ? 1 : 0; for (let i = 0; i < 420; i++) lay(i / 420 * TAU * 2 + Math.random() * 0.2); shp.zw = z0; }
+  if (document.fonts && document.fonts.load) document.fonts.load("500 100px 'AlpinaM'", '0').then(() => { if (sampleGlyph()) prime2(); }, () => {});
+
+  prime(); resize(); draw();
+  if (window.ResizeObserver) new ResizeObserver(() => { resize(); draw(); }).observe(cv);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)'); let last = 0;
+  function frame(now) { const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now; if (dt) { step(reduce.matches ? dt * 0.3 : dt); draw(); } requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

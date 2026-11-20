@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>f0 Scribble Orb</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one large square stage on paper, a short control column beside it; stacks on phones. Single light theme on purpose: the paint is made for paper. */
+  :root { --bg: #faf8f3; --ink: #1a1a18; --muted: #6a665e; --rule: #dcd7cb; --chip: #efebe1; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; --serif: "Newsreader", Georgia, serif; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: var(--mono); font-size: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 32px; align-items: start; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+  .stage { position: relative; }
+  #c { display: block; width: 100%; aspect-ratio: 1; max-width: 100%; }
+  .tag { position: absolute; left: 0; top: 0; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-size: 11px; }
+  .sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; padding-top: 16px; border-top: 1px solid var(--rule); }
+  .sizes figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+  .sizes canvas { display: block; }
+  aside { display: flex; flex-direction: column; gap: 20px; }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0; }
+  .lede { color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  legend { padding: 0; margin-bottom: 8px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { font: inherit; border: 1px solid var(--rule); background: var(--chip); color: var(--ink); padding: 6px 10px; border-radius: 3px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 40px; gap: 10px; align-items: center; }
+  .row output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <div>
+    <div class="stage"><canvas id="c" aria-label="The f0 orb: a hand scribbling short strokes of paint in one spot"></canvas><div class="tag" id="tag">idle</div></div>
+    <div class="sizes">
+      <figure><canvas id="s20" width="20" height="20"></canvas>20</figure>
+      <figure><canvas id="s32" width="32" height="32"></canvas>32</figure>
+      <figure><canvas id="s64" width="64" height="64"></canvas>64</figure>
+      <figure><canvas id="s128" width="128" height="128"></canvas>128</figure>
+    </div>
+  </div>
+  <aside>
+    <div>
+      <h1>Scribble</h1>
+      <p class="lede">A hand holding a brush, scribbling in one spot. The strokes sit side by side with paper showing between them, layer over layer at different angles, so the colours mix in the eye. The colour drifts steadily through the rainbow.</p>
+    </div>
+    <fieldset><legend>State</legend>
+      <div class="seg" id="states">
+        <button data-state="idle" aria-pressed="true">Idle</button>
+        <button data-state="listening" aria-pressed="false">Listening</button>
+        <button data-state="thinking" aria-pressed="false">Thinking</button>
+        <button data-state="speaking" aria-pressed="false">Speaking</button>
+      </div>
+    </fieldset>
+    <fieldset id="sliders"><legend>Adjust</legend></fieldset>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const hex = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const sn = (u, s) => (Math.sin(u + s) * 0.5 + Math.sin(u * 1.618 + s * 2.3) * 0.3 + Math.sin(u * 2.718 + s * 3.7) * 0.2);
+  const H2 = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const BGC = '#faf8f3', WHITE = [251, 246, 233], DEEP = [36, 28, 84], BAND = 0.19;
+  const at = (pal, j) => pal[((j % pal.length) + pal.length) % pal.length];
+  const P7 = ['#b5446e', '#d9773a', '#dcb043', '#6f9f52', '#1f8a86', '#33509e', '#5a3f93'].map(hex), PAL = [];
+  for (let i = 0; i < 21; i++) PAL.push(mix(P7[Math.floor(i / 3)], P7[(Math.floor(i / 3) + 1) % 7], (i % 3) / 3));
+
+  // ---------- renderer: stamped brush tip (real-paint look) ----------
+  function Stamp(c) {
+    const pal = c.pal, NB = c.nb || 1, R0 = 64, TL = c.tipLen || 0.5, CX = 60, CS = 76, VARS = 2, LV = 12, deep = c.deep || DEEP;
+    const lay = [];
+    for (let k = 0; k < (c.N || 110); k++) {
+      const r = j => H2(k * 1.37 + 11, j * 9.1 + 3.3), rad = Math.sqrt(r(1)), th = r(2) * 6.283, y = rad * Math.sin(th);
+      const kr = r(3), kind = kr < (c.light ?? 0.16) ? 1 : kr < (c.light ?? 0.16) + (c.dark ?? 0.11) ? 2 : 0;
+      lay.push({ x: rad * Math.cos(th) * TL, y, kind, r: (kind ? 0.025 + r(4) * 0.05 : 0.045 + r(4) * 0.085) * (c.dotR || 1), a: 0.55 + r(5) * 0.45,
+        hue: (r(6) - 0.5) * 2, tone: (r(7) - 0.5) * 2, thr: Math.max(0.03, 0.14 + 0.78 * r(8) - 0.32 * Math.abs(y) ** 3) });
+    }
+    const combs = [null];
+    for (let i = 1; i <= LV; i++) {
+      const d = i / LV, cc = document.createElement('canvas'); cc.width = 8; cc.height = CS * 2; const g = cc.getContext('2d');
+      for (const b of lay) { const over = d - b.thr; if (over <= 0) continue;
+        const hw = b.r * R0 * (0.22 + 2.8 * over), a = Math.min(1, over * 4), y = CS + b.y * R0, gr = g.createLinearGradient(0, y - hw, 0, y + hw);
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.3, `rgba(0,0,0,${a})`); gr.addColorStop(0.7, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(0, y - hw, 8, hw * 2); }
+      if (d > 0.8) { g.globalAlpha = Math.min(1, (d - 0.8) / 0.2) ** 2; g.fillStyle = '#000'; g.fillRect(0, 0, 8, CS * 2); }
+      combs.push(cc);
+    }
+    const cache = new Map();
+    function tip(j, v) {
+      const cv = document.createElement('canvas'); cv.width = CX * 2; cv.height = CS * 2; const g = cv.getContext('2d');
+      const base = at(pal, j), tv = (H2(j, v * 3.3) - 0.5) * 0.3 * (c.tone ?? 1), body = tv > 0 ? mix(base, WHITE, tv) : mix(base, deep, -tv);
+      g.translate(CX, CS);
+      g.save(); g.scale(TL * 0.92, 0.86); const bg = g.createRadialGradient(0, 0, 0, 0, 0, R0), ba = c.bodyA ?? 0.96;
+      bg.addColorStop(0, rgba(body, ba)); bg.addColorStop(0.78, rgba(body, ba * 0.98)); bg.addColorStop(1, rgba(body, 0));
+      g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R0, 0, 7); g.fill(); g.restore();
+      for (let m = 0; m < (c.blobs ?? 6); m++) {
+        const q = n => H2(m * 5.1 + j * 1.9 + n, v * 7.3 + n * 0.61), rad = Math.sqrt(q(1)) * 0.7, th = q(2) * 6.283, rr = (0.26 + q(3) * 0.26) * R0, w = q(4);
+        const col = w < 0.4 ? mix(base, at(pal, j + NB), 0.45 + q(5) * 0.4) : w < 0.7 ? mix(base, at(pal, j - NB), 0.45 + q(5) * 0.4) : w < 0.87 ? mix(base, WHITE, 0.3 + q(5) * 0.3) : mix(base, deep, 0.25 + q(5) * 0.25);
+        const al = 0.4 + q(6) * 0.3;
+        g.save(); g.translate(rad * Math.cos(th) * TL * R0, rad * Math.sin(th) * R0 * 0.85); g.scale(TL, 0.42);
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, al)); gr.addColorStop(0.55, rgba(col, al * 0.8)); gr.addColorStop(1, rgba(col, 0));
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+      }
+      for (let k = 0; k < lay.length; k++) {
+        const d = lay[k], q = H2(k + v * 31.7, j * 0.77), ts = c.tone ?? 1;
+        let col = mix(base, at(pal, j + (d.hue > 0 ? NB : -NB)), Math.abs(d.hue) * 0.42);
+        if (d.kind === 1) col = mix(col, WHITE, (0.32 + q * 0.38) * ts); else if (d.kind === 2) col = mix(col, deep, (0.25 + q * 0.3) * ts);
+        else { const tn = (d.tone * 0.6 + tv) * ts; col = tn > 0 ? mix(col, WHITE, tn * 0.45) : mix(col, deep, -tn * 0.34); }
+        const rr = d.r * R0, a = d.a * (c.dotA ?? 1);
+        g.save(); g.translate(d.x * R0 * 0.8, d.y * R0); g.scale(c.elong || 2.6, 1);
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, a)); gr.addColorStop(0.5, rgba(col, a * 0.85)); gr.addColorStop(1, rgba(col, 0));
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+      }
+      return cv;
+    }
+    function sprite(j, v, lvl) {
+      const jj = ((j % pal.length) + pal.length) % pal.length, key = (jj * VARS + v) * (LV + 1) + lvl; let sp = cache.get(key);
+      if (!sp) {
+        if (!lvl) sp = tip(jj, v);
+        else { sp = document.createElement('canvas'); sp.width = CX * 2; sp.height = CS * 2; const g = sp.getContext('2d'); g.drawImage(sprite(jj, v, 0), 0, 0); g.globalCompositeOperation = 'destination-out'; g.drawImage(combs[lvl], 0, 0, CX * 2, CS * 2); }
+        cache.set(key, sp);
+      }
+      return sp;
+    }
+    const band = c.band || BAND, wet = c.wet ?? 0.45, loadDry = c.loadDry ?? 0.2, dry = c.dry ?? 1;
+    return (g, P, n, k, cx, cy) => {
+      let carry = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const A = P[i], B = P[i + 1], seg = B.s - A.s; if (seg <= 0) continue;
+        const sp = Math.max(1.6 / k, 0.045 * A.hw);
+        for (let dd = carry; dd < seg; dd += sp) {
+          const q = dd / seg, s = A.s + dd, age = A.age + (B.age - A.age) * q;
+          let nx = A.nx + (B.nx - A.nx) * q, ny = A.ny + (B.ny - A.ny) * q; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+          // colour drifts steadily along the path; k is which stroke of the hand this is
+          const jf = A.j + (B.j - A.j) * q, j = Math.floor(jf), fr = jf - j, kS = A.k, f = B.k === A.k ? A.f + (B.f - A.f) * q : A.f;
+          const dB = f > 0.35 ? (f - 0.35) / 0.65 : 0, dA = age > wet ? (age - wet) / (1 - wet) : 0;
+          const d = Math.min(1, Math.max(dB * dB * loadDry, dA * (0.5 + 0.5 * dA)) * dry + (c.base || 0) + (dA > 0.92 ? (dA - 0.92) * 12.5 : 0)), lvl = Math.round(d * LV);
+          if (lvl >= LV) continue;
+          const sc = (A.hw + (B.hw - A.hw) * q) * (1.07 - 0.13 * f + 0.05 * (H2(kS, 4.2) - 0.5)) * k / R0;
+          const an = (H2(kS, 8.8) - 0.5) * 0.22, ca = Math.cos(an), sa = Math.sin(an), tx = ny, ty = -nx;
+          g.setTransform((tx * ca + nx * sa) * sc, (ty * ca + ny * sa) * sc, (nx * ca - tx * sa) * sc, (ny * ca - ty * sa) * sc, cx + (A.x + (B.x - A.x) * q) * k, cy + (A.y + (B.y - A.y) * q) * k);
+          // two neighbouring colours laid one over the other, so the change is gradual
+          g.globalAlpha = 1; g.drawImage(sprite(j, Math.floor(H2(j, 1.7) * VARS), lvl), -CX, -CS);
+          if (fr > 0.03) { g.globalAlpha = fr; g.drawImage(sprite(j + 1, Math.floor(H2(j + 1, 1.7) * VARS), lvl), -CX, -CS); g.globalAlpha = 1; }
+        }
+        carry = Math.max(0, carry + Math.ceil((seg - carry) / sp) * sp - seg);
+      }
+    };
+  }
+
+
+  const brush = Stamp({ pal: PAL, nb: 3, tone: 0.5, wet: 0.5, loadDry: 0.12, dry: 1 });
+
+  // ---------- controls ----------
+  const opts = { len: 0.2, speed: 1, size: 0.022, spread: 1, hue: 10, gap: 0.6 };
+  const SL = [['len', 'Stroke length', 0.03, 0.5, 0.01], ['size', 'Brush size', 0.015, 0.1, 0.005], ['speed', 'Hand speed', 0.3, 3, 0.05], ['spread', 'Spread', 0.4, 2, 0.05], ['hue', 'Colour change', 0, 40, 1], ['gap', 'Gaps', 0, 2, 0.05]];
+  const box = document.getElementById('sliders');
+  for (const [k, label, min, max, step] of SL) { const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<label for="r-${k}">${label}</label><input id="r-${k}" type="range" min="${min}" max="${max}" step="${step}" value="${opts[k]}"><output id="o-${k}">${opts[k]}</output>`;
+    box.appendChild(row); const inp = row.querySelector('input'), out = row.querySelector('output'); inp.addEventListener('input', () => { opts[k] = +inp.value; out.textContent = (+inp.value).toFixed(step < 0.01 ? 3 : 2); }); }
+
+  // ---------- the hand ----------
+  // The hand makes one short stroke after another. At the end of each stroke it turns back on
+  // itself, more or less, and the brush is instantly loaded with the next colour.
+  const STATES = ['idle', 'listening', 'thinking', 'speaking'];
+  const LOOK = { // hand speed, size of the patch, how wildly it turns, stroke length, seconds the paint lasts
+    idle:      { v: 0.32, R: 0.17, jit: 0.75, L: 1,   life: 7 },
+    listening: { v: 0.15, R: 0.10, jit: 0.9,  L: 0.6, life: 9 },
+    thinking:  { v: 0.85, R: 0.22, jit: 0.13, L: 1.5, life: 3.2 },
+    speaking:  { v: 0.5,  R: 0.2,  jit: 0.6,  L: 1,   life: 4 },
+  };
+  const wgt = { idle: 1, listening: 0, thinking: 0, speaking: 0 }, cur = { ...LOOK.idle };
+  let state = 'idle', x = 0, y = 0, t = 0, env = 0, envS = 0, jIdx = Math.random() * 21, kIdx = 0, st = null;
+  let syl = 0, sylDur = 0.2, sylAmp = 0, phraseLeft = 2, pause = 0;
+  function speech(dt) { if (pause > 0) { pause -= dt; return 0; } syl += dt;
+    if (syl >= sylDur) { syl = 0; sylDur = 0.12 + Math.random() * 0.18; sylAmp = 0.35 + Math.random() * 0.65; phraseLeft -= sylDur; if (phraseLeft <= 0) { phraseLeft = 1.2 + Math.random() * 2.6; pause = 0.25 + Math.random() * 0.6; return 0; } }
+    return sylAmp * Math.pow(Math.sin(Math.PI * syl / sylDur), 1.4); }
+  // Scribbling is hatching: the hand goes back and forth, and each stroke lands a little to one
+  // side of the last, so lines sit next to each other with paper showing between them. When
+  // the hatching reaches the edge of the patch, the hand turns and starts a new layer across it
+  // at another angle. Colours of different layers show through the gaps and mix in the eye.
+  let hatch = Math.random() * 6.28, sgn = 1, adv = 1, off = -0.1;
+  function newStroke() {
+    const L = opts.len * cur.L * (0.8 + 0.4 * Math.random()) * (1 + 1.4 * env * wgt.speaking), R = cur.R * opts.spread * (1 + 0.5 * envS);
+    const cx = 0.04 * sn(t * 0.21, 1.3), cy = 0.04 * sn(t * 0.17, 4.1);
+    off += adv * 2 * width() * (1 + opts.gap);              // the next line sits beside the last, a gap apart
+    if (Math.abs(off) > R * 0.9) {                          // reached the edge of the patch: new layer, new angle
+      hatch += (0.9 + Math.random() * 1.1) * (Math.random() < 0.5 ? -1 : 1);
+      off = Math.max(-R * 0.9, Math.min(R * 0.9, -(x - cx) * Math.sin(hatch) + (y - cy) * Math.cos(hatch)));
+      adv = off > 0 ? -1 : 1;
+    }
+    sgn = -sgn;
+    const a = hatch + gauss() * cur.jit * 0.12, ux = Math.cos(a), uy = Math.sin(a), nx = -Math.sin(hatch), ny = Math.cos(hatch);
+    // lines get shorter towards the edge, so the patch stays round
+    const chord = Math.sqrt(Math.max(0.0009, R * R - off * off)), half = Math.min(L / 2, chord), slide = (Math.random() * 2 - 1) * (chord - half);
+    const tx = cx + nx * off + ux * (sgn * half + slide), ty = cy + ny * off + uy * (sgn * half + slide);
+    st = { x0: x, y0: y, x1: tx, y1: ty, L: Math.hypot(tx - x, ty - y) || L, q: 0, bend: (Math.random() - 0.5) * 0.12 * L };
+    kIdx++;
+  }
+  let f = 0;
+  function step(dt) {
+    t += dt; const e = 1 - Math.exp(-dt * 1.6);
+    for (const s of STATES) wgt[s] += ((s === state ? 1 : 0) - wgt[s]) * e;
+    for (const k in cur) { let v = 0; for (const s of STATES) v += wgt[s] * LOOK[s][k]; cur[k] = v; }
+    const raw = state === 'speaking' ? speech(dt) : (pause = 0, 0);
+    env += (raw - env) * (1 - Math.exp(-dt * (raw > env ? 30 : 9))); envS += (env - envS) * (1 - Math.exp(-dt * 3));
+    if (!st) newStroke();
+    st.q += cur.v * opts.speed * (1 + 0.8 * env) * dt / st.L;
+    if (st.q >= 1) { x = st.x1; y = st.y1; newStroke(); }
+    // the hand slows into each turn
+    const q = st.q, ez = q * q * (3 - 2 * q), px = -(st.y1 - st.y0) / st.L, py = (st.x1 - st.x0) / st.L, bow = st.bend * Math.sin(Math.PI * ez);
+    x = st.x0 + (st.x1 - st.x0) * ez + px * bow; y = st.y0 + (st.y1 - st.y0) * ez + py * bow; f = ez;
+  }
+  const width = () => opts.size * (1 + 0.6 * env * wgt.speaking + 0.06 * wgt.listening * Math.sin(t * 2.2));
+  const pts = []; let oriX = 1, oriY = 0, lastNx = 0, lastNy = 1;
+  function pushPt() {
+    const lp = pts[pts.length - 1]; if (!lp) { pts.push({ x, y, nx: 0, ny: 1, w: width(), t, s: 0, j: jIdx, k: kIdx, f }); return; }
+    const dx = x - lp.x, dy = y - lp.y, d = Math.hypot(dx, dy); if (d <= 0.004 && lp.k === kIdx) return;
+    jIdx += d * opts.hue;   // the colour moves on with every bit of distance the brush covers
+    const th = Math.atan2(dy, dx), kk = 1 - Math.exp(-d / 0.05); oriX += (Math.cos(2 * th) - oriX) * kk; oriY += (Math.sin(2 * th) - oriY) * kk;
+    const a = Math.atan2(oriY, oriX) / 2; let nx = -Math.sin(a), ny = Math.cos(a); if (nx * lastNx + ny * lastNy < 0) { nx = -nx; ny = -ny; } lastNx = nx; lastNy = ny;
+    pts.push({ x, y, nx, ny, w: width(), t, s: lp.s + d, j: jIdx, k: kIdx, f });
+  }
+  const Hs = 1 / 240;
+  function advance(dt) { for (let a = dt; a > 0; a -= Hs) { step(Hs); pushPt(); } while (pts.length && t - pts[0].t > cur.life) pts.shift(); }
+
+  // ---------- draw ----------
+  let W = 1; const VIEW = 0.5;
+  function resize() { const dpr = Math.min(2, window.devicePixelRatio || 1); W = Math.min(1200, Math.max(60, Math.round(cv.clientWidth * dpr))); cv.width = cv.height = W; }
+  const previews = ['s20', 's32', 's64', 's128'].map(id => { const c = document.getElementById(id), css = c.width; c.style.width = c.style.height = css + 'px'; c.width = c.height = Math.round(css * Math.min(2, window.devicePixelRatio || 1)); return c; });
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = BGC; ctx.fillRect(0, 0, W, W);
+    const n0 = pts.length; if (n0 < 3) return;
+    const lp = pts[n0 - 1], hd = Math.hypot(x - lp.x, y - lp.y), P = hd > 1e-4 ? pts.concat([{ x, y, nx: lp.nx, ny: lp.ny, w: width(), t, s: lp.s + hd, j: jIdx, k: kIdx, f }]) : pts, n = P.length;
+    for (let i = 0; i < n; i++) { const p = P[i]; p.age = Math.min(1, Math.max(0, (t - p.t) / cur.life)); p.hw = p.w; }
+    brush(ctx, P, n, W / 2 / VIEW, W / 2, W / 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const crop = W * 0.8, o = (W - crop) / 2;
+    for (const p of previews) { const g = p.getContext('2d'); g.drawImage(cv, o, o, crop, crop, 0, 0, p.width, p.height); }
+  }
+
+  const tag = document.getElementById('tag');
+  document.querySelectorAll('#states button').forEach(b => b.addEventListener('click', () => { state = b.dataset.state; tag.textContent = state; document.querySelectorAll('#states button').forEach(o => o.setAttribute('aria-pressed', o === b)); }));
+  advance(8); resize(); draw();
+  if (window.ResizeObserver) new ResizeObserver(() => { resize(); draw(); }).observe(cv);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)'); let last = 0;
+  function frame(now) { const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now; if (dt) { advance(reduce.matches ? dt * 0.3 : dt); draw(); } requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

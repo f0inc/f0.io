@@ -1,0 +1,5 @@
+# Licensed separately: do not commit until the Grilli Type web/desktop licences are bought.
+# The fonts here now are TRIAL files, and favicon.png was rendered from the trial font.
+fonts/*.woff2
+favicon.png
+labs/img/

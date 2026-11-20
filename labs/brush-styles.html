@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>f0 Brush Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: a contact sheet. Twenty square tiles on paper, one control row on top. Single light theme on purpose: the paint is designed for paper. */
+  :root { --bg: #faf8f3; --ink: #1a1a18; --muted: #6a665e; --rule: #dcd7cb; --tile: #f5f2ea; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: var(--mono); font-size: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font: 500 13px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0; }
+  .lede { color: var(--muted); margin: 6px 0 0; line-height: 1.5; max-width: 62ch; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { font: inherit; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); padding: 6px 10px; border-radius: 3px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .tile { margin: 0; background: var(--tile); border: 1px solid transparent; border-radius: 4px; min-width: 0; cursor: pointer; display: flex; flex-direction: column; padding: 0; font: inherit; color: inherit; text-align: left; }
+  .tile.big { grid-column: 1 / -1; }
+  .tile.big canvas { max-width: 720px; margin: 0 auto; }
+  .tile[aria-pressed="true"] { border-color: var(--ink); }
+  .tile canvas { display: block; width: 100%; aspect-ratio: 1; }
+  /* GT Alpina trial, internal evaluation only */
+  @font-face { font-family: 'AlpinaM'; src: url("../fonts/GT-Alpina-Standard-Medium.woff2") format('woff2'); font-weight: 500; font-display: block; }
+  h2 { font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h2.second { margin-top: 36px; }
+  .wtile { margin: 0; background: var(--tile); border-radius: 4px; min-width: 0; display: flex; flex-direction: column; }
+  .wm { font-family: 'AlpinaM', Georgia, serif; font-weight: 500; font-size: 112px; line-height: 1; padding: 28px 16px 24px; text-align: center; white-space: nowrap; contain: paint; }
+  .wm span { -webkit-background-clip: text; background-clip: text; color: var(--ink); background-repeat: no-repeat; }
+  .wm span.on { color: transparent; }
+  .wm .eff { position: relative; z-index: 1; padding: 0 0.3em; margin: 0 -0.3em; }
+  .wm .zero { position: relative; z-index: 0; margin-left: -0.04em; }
+  .cap { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
+  .cap b { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .cap span { color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>f0 brush styles</h1>
+      <p class="lede">Twenty styles, shown twice: first as the f0 wordmark (simple f0, −0.04em spacing, one painting across both letters), then as the moving brush. The numbers match. Click a brush tile to see it large.</p>
+    </div>
+    <div class="seg" id="states" aria-label="State">
+      <button data-state="idle" aria-pressed="true">Idle</button>
+      <button data-state="listening" aria-pressed="false">Listening</button>
+      <button data-state="thinking" aria-pressed="false">Thinking</button>
+      <button data-state="speaking" aria-pressed="false">Speaking</button>
+    </div>
+  </header>
+  <h2>The f0 wordmark in each style</h2>
+  <div class="grid" id="wgrid"></div>
+  <h2 class="second">The moving brush in each style</h2>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+(() => {
+  // ---------- helpers ----------
+  const hex = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const sn = (u, s) => (Math.sin(u + s) * 0.5 + Math.sin(u * 1.618 + s * 2.3) * 0.3 + Math.sin(u * 2.718 + s * 3.7) * 0.2);
+  const H2 = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const BG = hex('#f5f2ea'), WHITE = [251, 246, 233], DEEP = [36, 28, 84], INK = [26, 26, 24];
+  const P7 = a => a.map(hex);
+  const RAINBOW = P7(['#b5446e', '#d9773a', '#dcb043', '#6f9f52', '#1f8a86', '#33509e', '#5a3f93']);
+  const BRIGHT = P7(['#e23d5b', '#f58a1f', '#f6c927', '#5cb85c', '#17a2a2', '#2f6fde', '#7a4fd0']);
+  const PASTEL = P7(['#e8a0b4', '#f2b98a', '#f0d484', '#b5d6a0', '#8fd0c8', '#9db7e8', '#b9a4dc']);
+  const OIL = (() => { const o = P7(['#2a2f6b', '#1d8a8a', '#c9b24a', '#b04a7a', '#3b2a6b']), r = []; for (let i = 0; i < o.length * 3; i++) r.push(mix(o[Math.floor(i / 3)], o[(Math.floor(i / 3) + 1) % o.length], (i % 3) / 3)); return r; })();
+  const at = (pal, j) => pal[((j % pal.length) + pal.length) % pal.length];
+  const wheel = (pal, u) => { u = ((u % 1) + 1) % 1 * pal.length; const i = Math.floor(u); return mix(at(pal, i), at(pal, i + 1), u - i); };
+  const tone = (c, r) => r > 0.5 ? mix(c, WHITE, (r - 0.5) * 0.7) : mix(c, DEEP, (0.5 - r) * 0.45);
+  const BAND = 0.19;
+  const bandU = s => (s + BAND * 0.2 * sn(s * 2.32 / BAND, 1.3)) / BAND;
+
+  // call fn at evenly spaced stations along the path; m is a stable index, so marks stay put
+  function stations(P, n, ds, fn) {
+    for (let i = 0; i < n - 1; i++) {
+      const A = P[i], B = P[i + 1], seg = B.s - A.s; if (seg <= 0) continue;
+      for (let m = Math.ceil(A.s / ds); m * ds < B.s; m++) {
+        const q = (m * ds - A.s) / seg;
+        let nx = A.nx + (B.nx - A.nx) * q, ny = A.ny + (B.ny - A.ny) * q; const l = Math.hypot(nx, ny) || 1;
+        fn(m, A.x + (B.x - A.x) * q, A.y + (B.y - A.y) * q, nx / l, ny / l, A.hw + (B.hw - A.hw) * q, A.age + (B.age - A.age) * q, m * ds);
+      }
+    }
+  }
+
+  // ---------- renderer: stamped brush tip (real-paint look) ----------
+  function Stamp(c) {
+    const pal = c.pal, NB = c.nb || 1, R0 = 64, TL = c.tipLen || 0.5, CX = 60, CS = 76, VARS = 2, LV = 12, deep = c.deep || DEEP;
+    const lay = [];
+    for (let k = 0; k < (c.N || 110); k++) {
+      const r = j => H2(k * 1.37 + 11, j * 9.1 + 3.3), rad = Math.sqrt(r(1)), th = r(2) * 6.283, y = rad * Math.sin(th);
+      const kr = r(3), kind = kr < (c.light ?? 0.16) ? 1 : kr < (c.light ?? 0.16) + (c.dark ?? 0.11) ? 2 : 0;
+      lay.push({ x: rad * Math.cos(th) * TL, y, kind, r: (kind ? 0.025 + r(4) * 0.05 : 0.045 + r(4) * 0.085) * (c.dotR || 1), a: 0.55 + r(5) * 0.45,
+        hue: (r(6) - 0.5) * 2, tone: (r(7) - 0.5) * 2, thr: Math.max(0.03, 0.14 + 0.78 * r(8) - 0.32 * Math.abs(y) ** 3) });
+    }
+    const combs = [null];
+    for (let i = 1; i <= LV; i++) {
+      const d = i / LV, cc = document.createElement('canvas'); cc.width = 8; cc.height = CS * 2; const g = cc.getContext('2d');
+      for (const b of lay) { const over = d - b.thr; if (over <= 0) continue;
+        const hw = b.r * R0 * (0.22 + 2.8 * over), a = Math.min(1, over * 4), y = CS + b.y * R0, gr = g.createLinearGradient(0, y - hw, 0, y + hw);
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.3, `rgba(0,0,0,${a})`); gr.addColorStop(0.7, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(0, y - hw, 8, hw * 2); }
+      if (d > 0.8) { g.globalAlpha = Math.min(1, (d - 0.8) / 0.2) ** 2; g.fillStyle = '#000'; g.fillRect(0, 0, 8, CS * 2); }
+      combs.push(cc);
+    }
+    const cache = new Map();
+    function tip(j, v) {
+      const cv = document.createElement('canvas'); cv.width = CX * 2; cv.height = CS * 2; const g = cv.getContext('2d');
+      const base = at(pal, j), tv = (H2(j, v * 3.3) - 0.5) * 0.3 * (c.tone ?? 1), body = tv > 0 ? mix(base, WHITE, tv) : mix(base, deep, -tv);
+      g.translate(CX, CS);
+      g.save(); g.scale(TL * 0.92, 0.86); const bg = g.createRadialGradient(0, 0, 0, 0, 0, R0), ba = c.bodyA ?? 0.96;
+      bg.addColorStop(0, rgba(body, ba)); bg.addColorStop(0.78, rgba(body, ba * 0.98)); bg.addColorStop(1, rgba(body, 0));
+      g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R0, 0, 7); g.fill(); g.restore();
+      for (let m = 0; m < (c.blobs ?? 6); m++) {
+        const q = n => H2(m * 5.1 + j * 1.9 + n, v * 7.3 + n * 0.61), rad = Math.sqrt(q(1)) * 0.7, th = q(2) * 6.283, rr = (0.26 + q(3) * 0.26) * R0, w = q(4);
+        const col = w < 0.4 ? mix(base, at(pal, j + NB), 0.45 + q(5) * 0.4) : w < 0.7 ? mix(base, at(pal, j - NB), 0.45 + q(5) * 0.4) : w < 0.87 ? mix(base, WHITE, 0.3 + q(5) * 0.3) : mix(base, deep, 0.25 + q(5) * 0.25);
+        const al = 0.4 + q(6) * 0.3;
+        g.save(); g.translate(rad * Math.cos(th) * TL * R0, rad * Math.sin(th) * R0 * 0.85); g.scale(TL, 0.42);
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, al)); gr.addColorStop(0.55, rgba(col, al * 0.8)); gr.addColorStop(1, rgba(col, 0));
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+      }
+      for (let k = 0; k < lay.length; k++) {
+        const d = lay[k], q = H2(k + v * 31.7, j * 0.77), ts = c.tone ?? 1;
+        let col = mix(base, at(pal, j + (d.hue > 0 ? NB : -NB)), Math.abs(d.hue) * 0.42);
+        if (d.kind === 1) col = mix(col, WHITE, (0.32 + q * 0.38) * ts); else if (d.kind === 2) col = mix(col, deep, (0.25 + q * 0.3) * ts);
+        else { const tn = (d.tone * 0.6 + tv) * ts; col = tn > 0 ? mix(col, WHITE, tn * 0.45) : mix(col, deep, -tn * 0.34); }
+        const rr = d.r * R0, a = d.a * (c.dotA ?? 1);
+        g.save(); g.translate(d.x * R0 * 0.8, d.y * R0); g.scale(c.elong || 2.6, 1);
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr); gr.addColorStop(0, rgba(col, a)); gr.addColorStop(0.5, rgba(col, a * 0.85)); gr.addColorStop(1, rgba(col, 0));
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); g.restore();
+      }
+      return cv;
+    }
+    function sprite(j, v, lvl) {
+      const jj = ((j % pal.length) + pal.length) % pal.length, key = (jj * VARS + v) * (LV + 1) + lvl; let sp = cache.get(key);
+      if (!sp) {
+        if (!lvl) sp = tip(jj, v);
+        else { sp = document.createElement('canvas'); sp.width = CX * 2; sp.height = CS * 2; const g = sp.getContext('2d'); g.drawImage(sprite(jj, v, 0), 0, 0); g.globalCompositeOperation = 'destination-out'; g.drawImage(combs[lvl], 0, 0, CX * 2, CS * 2); }
+        cache.set(key, sp);
+      }
+      return sp;
+    }
+    const band = c.band || BAND, wet = c.wet ?? 0.45, loadDry = c.loadDry ?? 0.2, dry = c.dry ?? 1;
+    return (g, P, n, k, cx, cy) => {
+      let carry = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const A = P[i], B = P[i + 1], seg = B.s - A.s; if (seg <= 0) continue;
+        const sp = Math.max(1.6 / k, 0.045 * A.hw);
+        for (let dd = carry; dd < seg; dd += sp) {
+          const q = dd / seg, s = A.s + dd, age = A.age + (B.age - A.age) * q;
+          let nx = A.nx + (B.nx - A.nx) * q, ny = A.ny + (B.ny - A.ny) * q; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+          const u = (s + band * 0.2 * sn(s * 2.32 / band, 1.3)) / band, j = Math.floor(u), f = u - j;
+          const dB = f > 0.35 ? (f - 0.35) / 0.65 : 0, dA = age > wet ? (age - wet) / (1 - wet) : 0;
+          const d = Math.min(1, Math.max(dB * dB * loadDry, dA * (0.5 + 0.5 * dA)) * dry + (c.base || 0) + (dA > 0.92 ? (dA - 0.92) * 12.5 : 0)), lvl = Math.round(d * LV);
+          if (lvl >= LV) continue;
+          const sc = (A.hw + (B.hw - A.hw) * q) * (1.07 - 0.13 * f + 0.05 * (H2(j, 4.2) - 0.5)) * k / R0;
+          const an = (H2(j, 8.8) - 0.5) * 0.22, ca = Math.cos(an), sa = Math.sin(an), tx = ny, ty = -nx;
+          g.setTransform((tx * ca + nx * sa) * sc, (ty * ca + ny * sa) * sc, (nx * ca - tx * sa) * sc, (ny * ca - ty * sa) * sc, cx + (A.x + (B.x - A.x) * q) * k, cy + (A.y + (B.y - A.y) * q) * k);
+          g.drawImage(sprite(j, Math.floor(H2(j, 1.7) * VARS), lvl), -CX, -CS);
+        }
+        carry = Math.max(0, carry + Math.ceil((seg - carry) / sp) * sp - seg);
+      }
+    };
+  }
+
+  // ---------- renderers: vector styles ----------
+  const unit = (g, k, cx, cy) => { g.setTransform(k, 0, 0, k, cx, cy); g.lineCap = 'round'; g.lineJoin = 'round'; };
+  const Ribbon = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    for (let i = 1; i < n; i++) { const a = P[i - 1], b = P[i], tp = Math.pow(1 - b.age, c.taper); if (tp < 0.01) continue;
+      g.strokeStyle = rgb(mix(c.col(b.s), BG, Math.pow(b.age, 1.6) * (c.fade ?? 0.7))); g.lineWidth = 2 * b.hw * tp * (c.w || 1);
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+    if (c.dot) { const h = P[n - 1]; g.fillStyle = rgb(c.col(h.s)); g.beginPath(); g.arc(h.x, h.y, h.hw * c.dot, 0, 7); g.fill(); }
+  };
+  const Nib = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy); const ux = Math.cos(c.ang), uy = Math.sin(c.ang);
+    for (let i = 1; i < n; i++) { const a = P[i - 1], b = P[i], wa = a.hw * (1 - a.age * a.age), wb = b.hw * (1 - b.age * b.age);
+      const col = rgb(mix(c.col(b.s), BG, Math.pow(b.age, 2) * 0.5)); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 0.6 / k;
+      g.beginPath(); g.moveTo(a.x + ux * wa, a.y + uy * wa); g.lineTo(b.x + ux * wb, b.y + uy * wb); g.lineTo(b.x - ux * wb, b.y - uy * wb); g.lineTo(a.x - ux * wa, a.y - uy * wa); g.closePath(); g.fill(); g.stroke(); }
+  };
+  const Dots = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    stations(P, n, c.ds, (m, x, y, nx, ny, hw, age, s) => { for (let q = 0; q < c.K; q++) {
+      if (H2(m, q + 7.7) < Math.pow(age, c.diss)) continue;
+      const off = (H2(m, q * 3.1 + 1) * 2 - 1), al = (H2(m + 0.5, q * 1.7 + 2) - 0.5) * c.ds * 1.6; if (off * off > H2(m, q + 9) * 0.6 + 0.55) continue;
+      const j = Math.floor(bandU(s) + (H2(m, q + 11) - 0.5) * c.jit);
+      g.fillStyle = rgb(tone(at(c.pal, j), 0.3 + H2(m, q + 5) * 0.5)); g.beginPath();
+      g.arc(x + nx * off * hw + ny * al, y + ny * off * hw - nx * al, hw * c.r * (0.6 + 0.8 * H2(m, q + 3)) * (1 - 0.4 * age), 0, 7); g.fill(); } });
+  };
+  const Halftone = c => { let cov = null, bnd = null; return (g, P, n, k, cx, cy, view) => {
+    const cell = c.cell, G = Math.ceil(2 * view / cell) + 2, org = -G * cell / 2;
+    if (!cov || cov.length !== G * G) { cov = new Float32Array(G * G); bnd = new Int16Array(G * G); } else cov.fill(0);
+    stations(P, n, 0.02, (m, x, y, nx, ny, hw, age, s) => { const j = Math.floor(bandU(s)), r = Math.ceil(hw / cell) + 1, ix0 = Math.floor((x - org) / cell), iy0 = Math.floor((y - org) / cell);
+      for (let iy = iy0 - r; iy <= iy0 + r; iy++) for (let ix = ix0 - r; ix <= ix0 + r; ix++) { if (ix < 0 || iy < 0 || ix >= G || iy >= G) continue;
+        const d = Math.hypot(org + (ix + 0.5) * cell - x, org + (iy + 0.5) * cell - y) / hw; if (d >= 1) continue;
+        const v = Math.pow(1 - d, 0.6) * (1 - age * age), id = iy * G + ix; if (v > cov[id]) { cov[id] = v; bnd[id] = j; } } });
+    unit(g, k, cx, cy);
+    for (let id = 0; id < G * G; id++) { const v = cov[id]; if (v < 0.04) continue; g.fillStyle = rgb(at(c.pal, bnd[id])); g.beginPath();
+      g.arc(org + (id % G + 0.5) * cell, org + (Math.floor(id / G) + 0.5) * cell, cell * 0.56 * Math.sqrt(v), 0, 7); g.fill(); }
+  }; };
+  const Dashes = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy); if (c.cap) g.lineCap = c.cap;
+    stations(P, n, c.ds, (m, x, y, nx, ny, hw, age, s) => { for (let q = 0; q < c.K; q++) {
+      if (H2(m, q + 7.7) < Math.pow(age, c.diss)) continue;
+      const off = (H2(m, q * 3.1 + 1) * 2 - 1) * (c.spread ?? 0.9), ang = (c.fixed !== undefined ? (q % 2 ? c.fixed : -c.fixed) : Math.atan2(-nx, ny)) + (H2(m, q + 2.2) - 0.5) * c.jitA;
+      const len = hw * c.len * (0.7 + 0.6 * H2(m, q + 4)) / 2, px = x + nx * off * hw, py = y + ny * off * hw;
+      g.strokeStyle = c.mono ? rgba(c.mono, c.alpha * (1 - age * 0.6)) : rgb(tone(at(c.pal, Math.floor(bandU(s) + (H2(m, q + 11) - 0.5) * c.jit)), 0.25 + H2(m, q + 5) * 0.55));
+      g.lineWidth = hw * c.w * (0.7 + 0.6 * H2(m, q + 6)); g.beginPath(); g.moveTo(px - Math.cos(ang) * len, py - Math.sin(ang) * len); g.lineTo(px + Math.cos(ang) * len, py + Math.sin(ang) * len); g.stroke(); } });
+  };
+  const Water = c => { const sprites = c.pal.map(col => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, rgba(col, 0.45)); gr.addColorStop(0.7, rgba(col, 0.6)); gr.addColorStop(0.9, rgba(col, 1)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return cv; });
+    return (g, P, n, k, cx, cy) => { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'multiply';
+      stations(P, n, 0.012, (m, x, y, nx, ny, hw, age, s) => { const r = hw * (1.05 + 0.25 * H2(m, 2)) * k, j = Math.floor(bandU(s) + (H2(m, 5) - 0.5) * 1.2), o = (H2(m, 3) - 0.5) * hw * 0.5 * k;
+        g.globalAlpha = c.a * Math.pow(1 - age, 1.3); g.drawImage(at(sprites, j), cx + x * k + nx * o - r, cy + y * k + ny * o - r, r * 2, r * 2); });
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }; };
+  const Marker = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy); g.lineCap = 'butt'; g.globalCompositeOperation = 'multiply';
+    let i = 0; while (i < n - 1) { const j = Math.floor(bandU(P[i].s)); let e = i; while (e < n - 1 && Math.floor(bandU(P[e].s)) === j) e++;
+      const mid = P[(i + e) >> 1]; g.globalAlpha = c.a * (1 - mid.age * mid.age); g.strokeStyle = rgb(at(c.pal, j)); g.lineWidth = 2 * mid.hw * 0.85;
+      g.beginPath(); g.moveTo(P[i].x, P[i].y); for (let q = i + 1; q <= e; q++) g.lineTo(P[q].x, P[q].y); g.stroke(); i = e; }
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  };
+  const Hairs = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    for (let h = 0; h < c.N; h++) { const off = -1 + 2 * (h + 0.5) / c.N, end = 0.5 + 0.5 * H2(h, 3), sd = H2(h, 5) * 50;
+      g.strokeStyle = rgb(c.mono ? mix(c.mono, BG, H2(h, 8) * 0.35) : tone(wheel(c.pal, h / c.N * 0.86), 0.35 + H2(h, 7) * 0.35));
+      g.lineWidth = 2 * P[n - 1].hw / c.N * (0.7 + H2(h, 2) * 0.9); g.beginPath(); let open = false;
+      for (let i = 0; i < n; i++) { const p = P[i]; if (p.age > end) continue; const o = off * p.hw * (1 + 0.12 * sn(p.s * 9 + sd, sd));
+        if (!open) { g.moveTo(p.x + p.nx * o, p.y + p.ny * o); open = true; } else g.lineTo(p.x + p.nx * o, p.y + p.ny * o); }
+      g.stroke(); }
+  };
+  const Spray = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    stations(P, n, 0.008, (m, x, y, nx, ny, hw, age, s) => { for (let q = 0; q < 9; q++) {
+      if (H2(m, q + 7.7) < Math.pow(age, 1.1)) continue;
+      const off = (H2(m, q + 1) + H2(m, q + 2.5) + H2(m, q + 4.1) - 1.5) * 1.25, al = (H2(m, q + 6) - 0.5) * 0.03, sz = hw * (0.03 + 0.08 * H2(m, q + 3) ** 2);
+      g.fillStyle = rgb(tone(at(c.pal, Math.floor(bandU(s) + (H2(m, q + 11) - 0.5) * 1.4)), 0.3 + H2(m, q + 5) * 0.5));
+      g.beginPath(); g.arc(x + nx * off * hw + ny * al, y + ny * off * hw - nx * al, sz, 0, 7); g.fill(); } });
+  };
+  const grain = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 160; const g = cv.getContext('2d'), id = g.createImageData(160, 160);
+    for (let i = 0; i < 160 * 160; i++) { const x = i % 160, y = (i / 160) | 0, v = H2(x >> 1, y >> 1) * 0.6 + H2(x, y + 0.5) * 0.4; id.data[i * 4 + 3] = v > 0.5 ? Math.min(255, (v - 0.5) * 900) : 0; }
+    g.putImageData(id, 0, 0); return cv; })();
+  const Chalk = c => { const lay = document.createElement('canvas'), lg = lay.getContext('2d'); let pat = null; return (g, P, n, k, cx, cy) => {
+    const W = g.canvas.width; if (lay.width !== W) { lay.width = lay.height = W; pat = lg.createPattern(grain, 'repeat'); }
+    lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, W, W); unit(lg, k, cx, cy);
+    for (let i = 1; i < n; i++) { const a = P[i - 1], b = P[i], tp = Math.pow(1 - b.age, 0.45); if (tp < 0.02) continue;
+      lg.strokeStyle = rgb(tone(at(c.pal, Math.floor(bandU(b.s))), 0.45 + 0.2 * sn(b.s * 30, 1))); lg.lineWidth = 2 * b.hw * tp; lg.beginPath(); lg.moveTo(a.x, a.y); lg.lineTo(b.x, b.y); lg.stroke(); }
+    lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalCompositeOperation = 'destination-out'; lg.fillStyle = pat; lg.fillRect(0, 0, W, W);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(lay, 0, 0); }; };
+  const Tube = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    for (const [wf, sh, dx] of [[1, 0.38, 0], [0.76, 0, 0], [0.13, -1, -0.36]]) for (let i = 1; i < n; i++) { const a = P[i - 1], b = P[i], tp = Math.pow(1 - b.age, 0.6); if (tp < 0.02) continue;
+      const col = wheel(c.pal, bandU(b.s) / c.pal.length), o = dx * b.hw * tp;
+      g.strokeStyle = sh < 0 ? 'rgba(255,255,255,0.55)' : rgb(sh ? mix(col, DEEP, sh) : col); g.lineWidth = 2 * b.hw * tp * wf; g.beginPath(); g.moveTo(a.x + o, a.y + o); g.lineTo(b.x + o, b.y + o); g.stroke(); }
+  };
+  const Knife = c => (g, P, n, k, cx, cy) => {
+    unit(g, k, cx, cy);
+    let i = 0; while (i < n - 1) { const j = Math.floor(bandU(P[i].s)); let e = i; while (e < n - 1 && Math.floor(bandU(P[e].s)) === j) e++;
+      const A = P[i], B = P[e], mid = P[(i + e) >> 1], len = Math.hypot(B.x - A.x, B.y - A.y); if (len > 0.01) {
+        const ang = Math.atan2(B.y - A.y, B.x - A.x) + (H2(j, 2) - 0.5) * 0.3, w = mid.hw * (0.85 + 0.3 * H2(j, 3)), L = len / 2 + mid.hw * 0.22, col = tone(at(c.pal, j), 0.4 + H2(j, 5) * 0.25);
+        g.save(); g.translate((A.x + B.x) / 2 + (mid.x - (A.x + B.x) / 2) * 0.6, (A.y + B.y) / 2 + (mid.y - (A.y + B.y) / 2) * 0.6); g.rotate(ang); g.globalAlpha = 1 - Math.pow(mid.age, 3);
+        g.fillStyle = rgb(col); g.fillRect(-L, -w, 2 * L, 2 * w); g.fillStyle = rgb(mix(col, WHITE, 0.4)); g.fillRect(-L, -w, 2 * L, w * 0.22); g.fillStyle = rgb(mix(col, DEEP, 0.35)); g.fillRect(-L, w * 0.84, 2 * L, w * 0.16); g.restore(); }
+      i = e; }
+    g.globalAlpha = 1;
+  };
+
+  // ---------- the twenty ----------
+  const rainbowS = pal => s => wheel(pal, bandU(s) / pal.length);
+  const STYLES = [
+    ['Impasto', 'thick oil, short dabs', Stamp({ pal: RAINBOW })],
+    ['Wet oil', 'loaded, glossy, no gaps', Stamp({ pal: BRIGHT, dry: 0.35, loadDry: 0, wet: 0.7, N: 70, dotR: 1.4, tone: 0.8, band: 0.24 })],
+    ['Dry brush', 'scratchy, running out of paint', Stamp({ pal: RAINBOW, base: 0.3, dry: 1.3, wet: 0.2, bodyA: 0.55, N: 140 })],
+    ['Sumi ink', 'one black stroke, ensō', Stamp({ pal: [INK], deep: [0, 0, 0], base: 0.12, dry: 1.4, wet: 0.25, loadDry: 0.6, tone: 1.3, band: 0.5 })],
+    ['Oil slick', 'one colour at a time, slow drift', Stamp({ pal: OIL, band: 0.1, loadDry: 0, tone: 0.7, blobs: 3 })],
+    ['Gouache', 'matte pastel dabs', Stamp({ pal: PASTEL, tone: 0.5, light: 0.08, dark: 0.05, dry: 0.7, N: 60, dotR: 1.3 })],
+    ['Clean line', 'smooth gradient, tapered', Ribbon({ taper: 1, col: rainbowS(RAINBOW), dot: 1 })],
+    ['Ink comet', 'black dot with a tail', Ribbon({ taper: 1.6, col: () => INK, fade: 0, w: 0.7, dot: 1 })],
+    ['Nib', 'calligraphy pen, thick and thin', Nib({ ang: -0.7, col: () => INK })],
+    ['Pointillist', 'Seurat dots', Dots({ pal: BRIGHT, ds: 0.012, K: 5, r: 0.13, jit: 2.2, diss: 1.6 })],
+    ['Halftone', 'print dots on a grid', Halftone({ pal: RAINBOW, cell: 0.034 })],
+    ['Van Gogh', 'short thick dashes', Dashes({ pal: RAINBOW, ds: 0.02, K: 3, len: 0.95, w: 0.2, jitA: 0.7, jit: 1.6, diss: 1.5 })],
+    ['Pencil', 'graphite cross-hatching', Dashes({ mono: [60, 60, 58], alpha: 0.6, ds: 0.008, K: 2, len: 1.1, w: 0.03, fixed: 0.8, jitA: 0.25, jit: 0, diss: 1.2, spread: 0.95 })],
+    ['Watercolour', 'washes with wet edges', Water({ pal: BRIGHT, a: 0.11 })],
+    ['Marker', 'flat felt-tip overlaps', Marker({ pal: BRIGHT, a: 0.62 })],
+    ['Silk threads', 'rainbow across the stroke', Hairs({ pal: RAINBOW, N: 42 })],
+    ['Spray', 'airbrush speckle', Spray({ pal: BRIGHT })],
+    ['Chalk', 'pastel stick on rough paper', Chalk({ pal: PASTEL.map(c => mix(c, hex('#444444'), 0.12)) })],
+    ['Gloss', 'shiny tube of paint', Tube({ pal: BRIGHT })],
+    ['Palette knife', 'flat slabs with ridges', Knife({ pal: RAINBOW })],
+  ];
+
+  // ---------- the wordmark, painted in each style ----------
+  // Each style paints a whole sheet by sweeping the brush back and forth in rows; both letters
+  // are then cut from that one sheet, so strokes and colours run across from the f into the 0.
+  function sheetPath() {
+    const P = [], hw = 0.07; let s = 0, dir = 1, lx = 0, ly = 0;
+    for (let y = -1.06; y <= 1.07; y += 0.115) { for (let i = 0; i <= 320; i++) { const x = dir * (-1.12 + 2.24 * i / 320);
+      if (P.length) s += Math.hypot(x - lx, y - ly); lx = x; ly = y; P.push({ x, y, nx: 0, ny: 1, s, hw, w: hw, age: 0 }); } dir = -dir; }
+    return P;
+  }
+  async function wordmarks() {
+    try { await document.fonts.load("500 112px 'AlpinaM'", 'f0'); } catch (e) {}
+    const wg = document.getElementById('wgrid'), P = sheetPath(), els = [];
+    STYLES.forEach(([name, note], i) => { const f = document.createElement('figure'); f.className = 'wtile';
+      f.innerHTML = `<div class="wm" aria-label="f0"><span class="eff">f</span><span class="zero">0</span></div><div class="cap"><b>${String(i + 1).padStart(2, '0')}</b><b>${name}</b><span>${note}</span></div>`;
+      wg.appendChild(f); els.push(f.querySelector('.wm')); });
+    for (let i = 0; i < STYLES.length; i++) {
+      const cvs = document.createElement('canvas'); cvs.width = cvs.height = 900; const g = cvs.getContext('2d');
+      STYLES[i][2](g, P, P.length, 450, 450, 450, 1);
+      const url = await new Promise(r => cvs.toBlob(b => r(URL.createObjectURL(b))));
+      const e = els[i].querySelector('.eff'), z = els[i].querySelector('.zero'), re = e.getBoundingClientRect(), rz = z.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(e).paddingLeft), L = Math.min(re.left + pad, rz.left), T = Math.min(re.top, rz.top) + re.height * 0.12, R = Math.max(re.right - pad, rz.right), B = Math.max(re.bottom, rz.bottom) - re.height * 0.1;
+      for (const [el, r] of [[e, re], [z, rz]]) { el.style.backgroundImage = `url("${url}")`; el.style.backgroundSize = `${(R - L).toFixed(1)}px ${(B - T).toFixed(1)}px`;
+        el.style.backgroundPosition = `${(L - r.left).toFixed(1)}px ${(T - r.top).toFixed(1)}px`; el.classList.add('on'); }
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+
+  // ---------- motion (same for every tile) ----------
+  const opts = { speed: 0.25, flutter: 1, fspeed: 0.55, dot: 2, width: 1.1 };
+  const STATES = ['idle', 'listening', 'thinking', 'speaking'];
+  const LOOK = { idle: { trail: 8, size: 1, view: 0.5 }, listening: { trail: 17, size: 1.3, view: 0.42 }, thinking: { trail: 3.4, size: 0.9, view: 0.84 }, speaking: { trail: 2.4, size: 1, view: 0.78 } };
+  LOOK.idle.trail = 0.97 * 2 * Math.PI / (3 * opts.speed); LOOK.listening.trail = 0.95 * 2 * Math.PI / (1.4 * opts.speed);
+  const wgt = { idle: 1, listening: 0, thinking: 0, speaking: 0 }, cur = { trail: LOOK.idle.trail, size: 1, view: 0.5 };
+  let state = 'idle', x = 0, y = 0, t = 0, env = 0, envS = 0, phO = Math.random() * 6.28, phX = 0, phY = 1, flutU = 0, flutV = 0, flutAmp = 0;
+  let syl = 0, sylDur = 0.2, sylAmp = 0, phraseLeft = 2, pause = 0;
+  function speech(dt) { if (pause > 0) { pause -= dt; return 0; } syl += dt;
+    if (syl >= sylDur) { syl = 0; sylDur = 0.12 + Math.random() * 0.18; sylAmp = 0.35 + Math.random() * 0.65; phraseLeft -= sylDur; if (phraseLeft <= 0) { phraseLeft = 1.2 + Math.random() * 2.6; pause = 0.25 + Math.random() * 0.6; return 0; } }
+    return sylAmp * Math.pow(Math.sin(Math.PI * syl / sylDur), 1.4); }
+  const DOT = 0.05, dotR = () => DOT * opts.dot * cur.size * (1 + wgt.listening * 0.1 * Math.sin(t * 2.2) + env * 0.9);
+  function step(dt) {
+    t += dt; const e = 1 - Math.exp(-dt * 1.4);
+    for (const s of STATES) wgt[s] += ((s === state ? 1 : 0) - wgt[s]) * e;
+    for (const key of ['trail', 'size', 'view']) { let v = 0; for (const s of STATES) v += wgt[s] * LOOK[s][key]; cur[key] = v; }
+    const raw = state === 'speaking' ? speech(dt) : (pause = 0, 0);
+    env += (raw - env) * (1 - Math.exp(-dt * (raw > env ? 30 : 9))); envS += (env - envS) * (1 - Math.exp(-dt * 3));
+    phO += (wgt.idle * 3 + wgt.listening * 1.4 + wgt.speaking * 2.4 + wgt.thinking * 2.6) * (1 + envS * 0.3) * opts.speed * dt; phX += 9 * opts.speed * dt; phY += 0.9 * opts.speed * dt;
+    flutV += (-flutV * 2.2 * opts.fspeed) * dt + gauss() * 6 * opts.fspeed * Math.sqrt(dt); flutU += flutV * dt; flutAmp = opts.flutter * (0.25 + 0.2 * sn(t * 0.23, 13.1));
+    const amp = flutAmp, tt = flutU, r = DOT * opts.dot * 2 * (1 + 0.45 * amp * sn(tt, 0.3)), ecc = 0.3 * amp * sn(tt * 0.8, 1.9), rot = tt * 1.3 + sn(tt * 0.5, 4.1) * 1.2, lobe = 0.18 * amp * Math.max(0, sn(tt * 0.7, 2.6));
+    const ex = Math.cos(phO) * (1 + ecc) * (1 + lobe * Math.cos(3 * phO)) * r, ey = Math.sin(phO) * (1 - ecc) * (1 + lobe * Math.cos(3 * phO)) * r, c = Math.cos(rot), s = Math.sin(rot);
+    const ox = 0.05 * amp * sn(tt * 0.6, 5.2) + ex * c - ey * s, oy = 0.05 * amp * sn(tt * 0.6, 7.7) + ex * s + ey * c;
+    x = (wgt.idle + wgt.listening * 0.6 + wgt.speaking * 1.7) * ox + wgt.thinking * 0.62 * Math.sin(phX);
+    y = (wgt.idle + wgt.listening * 0.6 + wgt.speaking * 1.7) * oy + wgt.thinking * 0.025 * Math.sin(phY);
+  }
+  const pts = []; let oriX = 1, oriY = 0, lastNx = 0, lastNy = 1;
+  function pushPt() {
+    const lp = pts[pts.length - 1]; if (!lp) { pts.push({ x, y, nx: 0, ny: 1, w: dotR(), t, s: 0 }); return; }
+    const dx = x - lp.x, dy = y - lp.y, d = Math.hypot(dx, dy); if (d <= 0.007) { lp.w = Math.max(lp.w, dotR()); return; }
+    const th = Math.atan2(dy, dx), kk = 1 - Math.exp(-d / 0.06); oriX += (Math.cos(2 * th) - oriX) * kk; oriY += (Math.sin(2 * th) - oriY) * kk;
+    const a = Math.atan2(oriY, oriX) / 2; let nx = -Math.sin(a), ny = Math.cos(a); if (nx * lastNx + ny * lastNy < 0) { nx = -nx; ny = -ny; } lastNx = nx; lastNy = ny;
+    pts.push({ x, y, nx, ny, w: dotR(), t, s: lp.s + d });
+  }
+  const Hs = 1 / 240;
+  function advance(dt) { for (let a = dt; a > 0; a -= Hs) { step(Hs); pushPt(); } while (pts.length && t - pts[0].t > cur.trail) pts.shift(); }
+
+  // ---------- tiles ----------
+  const grid = document.getElementById('grid'), tiles = [];
+  STYLES.forEach(([name, note, draw], i) => {
+    const b = document.createElement('button'); b.className = 'tile'; b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `<canvas aria-hidden="true"></canvas><div class="cap"><b>${String(i + 1).padStart(2, '0')}</b><b>${name}</b><span>${note}</span></div>`;
+    const cv = b.querySelector('canvas'), T = { cv, g: cv.getContext('2d'), draw, vis: true, W: 0 };
+    b.addEventListener('click', () => { const on = !b.classList.contains('big'); tiles.forEach(o => { o.cv.parentNode.classList.remove('big'); o.cv.parentNode.setAttribute('aria-pressed', 'false'); });
+      if (on) { b.classList.add('big'); b.setAttribute('aria-pressed', 'true'); b.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } });
+    grid.appendChild(b); tiles.push(T);
+  });
+  if (window.IntersectionObserver) { const io = new IntersectionObserver(es => es.forEach(e => { const T = tiles.find(o => o.cv === e.target); if (T) T.vis = e.isIntersecting; }), { rootMargin: '100px' }); tiles.forEach(T => io.observe(T.cv)); }
+  document.querySelectorAll('#states button').forEach(b => b.addEventListener('click', () => { state = b.dataset.state; document.querySelectorAll('#states button').forEach(o => o.setAttribute('aria-pressed', o === b)); }));
+
+  function render() {
+    const n0 = pts.length; if (n0 < 3) return;
+    const lp = pts[n0 - 1], hd = Math.hypot(x - lp.x, y - lp.y), P = hd > 1e-4 ? pts.concat([{ x, y, nx: lp.nx, ny: lp.ny, w: dotR(), t, s: lp.s + hd }]) : pts, n = P.length;
+    for (let i = 0; i < n; i++) { const p = P[i]; p.age = Math.min(1, Math.max(0, (t - p.t) / cur.trail)); p.hw = p.w * opts.width * (1 + 0.05 * sn(p.s * 9, 2.2)); }
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (const T of tiles) { if (!T.vis) continue;
+      const W = Math.min(1100, Math.round(T.cv.clientWidth * dpr)); if (W < 8) continue; if (W !== T.W) { T.W = T.cv.width = T.cv.height = W; }
+      const g = T.g; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.fillStyle = rgb(BG); g.fillRect(0, 0, W, W);
+      T.draw(g, P, n, W / 2 / cur.view, W / 2, W / 2, cur.view); }
+  }
+  advance(9); render(); wordmarks();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)'); let last = 0;
+  function frame(now) { const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now; if (dt) { advance(reduce.matches ? dt * 0.35 : dt); render(); } requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

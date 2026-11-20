@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>f0 Rainbow Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: contact sheet of wordmarks on paper; single light theme, the mark is made for paper. */
+  @font-face { font-family: 'AlpinaM'; src: url("../fonts/GT-Alpina-Standard-Medium.woff2") format('woff2'); font-weight: 500; font-display: block; }
+  :root { --bg: #faf8f3; --ink: #1a1a18; --muted: #6a665e; --rule: #dcd7cb; --tile: #f5f2ea; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: var(--mono); font-size: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font: 500 13px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0; }
+  .lede { color: var(--muted); margin: 6px 0 20px; line-height: 1.5; max-width: 64ch; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 16px; }
+  .seg button { font: inherit; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); padding: 6px 10px; border-radius: 3px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .wm span.ink { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .tile { margin: 0; background: var(--tile); border-radius: 4px; min-width: 0; display: flex; flex-direction: column; }
+  .wm { font-family: 'AlpinaM', Georgia, serif; font-weight: 500; font-size: 136px; line-height: 1; padding: 30px 16px 26px; text-align: center; white-space: nowrap; contain: paint; }
+  .wm span { -webkit-background-clip: text; background-clip: text; color: var(--rule); background-repeat: no-repeat; }
+  .wm span.on { color: transparent; }
+  .wm .eff { position: relative; z-index: 1; padding: 0 0.3em; margin: 0 -0.3em; }
+  .wm .z0 { position: relative; z-index: 0; margin-left: -0.04em; }
+  figcaption { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
+  figcaption b { font-weight: 500; font-variant-numeric: tabular-nums; }
+  figcaption span { color: var(--muted); }
+</style>
+<div class="wrap">
+  <h1>f0: rainbow styles</h1>
+  <p class="lede">The simple f0 at −0.04em, always in the same colours, always one painting across both letters. What changes is how the paint is put on and how the rainbow is laid out. They paint in one at a time. Tell me the numbers you like.</p>
+  <div class="seg" id="modes" aria-label="How the letters are painted">
+    <button data-m="one" aria-pressed="true">One painting across both</button>
+    <button data-m="sep" aria-pressed="false">Each letter its own rainbow</button>
+    <button data-m="black" aria-pressed="false">Black f, rainbow 0</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+// f0 brush mark and painted wordmark.
+// One brush that never lifts: it loads a colour, lays a short stroke, loads the next, and the
+// strokes add up to a rainbow. The same brush paints the 0 of the wordmark once, on load.
+(() => {
+  const cv = document.getElementById('mark');
+  const O = { speed: 0.25, flutter: 1, fspeed: 0.55, dot: 2, width: 1.1, band: 0.19, dry: 1, bristles: 110 };
+  const VIEW = 0.46;            // half-width of the visible area, in brush units
+
+  const hex = h => { h = h.trim().replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  // smooth pseudo-noise in [-1, 1] from incommensurate sines
+  const sn = (u, s) => (Math.sin(u * 1.0 + s) * 0.5 + Math.sin(u * 1.618 + s * 2.3) * 0.3 + Math.sin(u * 2.718 + s * 3.7) * 0.2);
+  const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+  // ---------- paint engine ----------
+  // The stroke is made the way a real brush makes it: the brush tip (a soft body of paint
+  // plus a hundred bristle marks) is pressed down again and again, very close together, as
+  // it moves. Each bristle drags its own streak. The brush is loaded with one colour for a
+  // short stretch, then the next colour of the rainbow: a new, round-fronted dab that
+  // overlaps the end of the last one. Towards the end of each load, and as the trail ages,
+  // bristles run dry one by one and leave gaps.
+  const PAL = ['#b5446e', '#d9773a', '#dcb043', '#6f9f52', '#1f8a86', '#33509e', '#5a3f93'].map(hex);
+  const WHITE = [251, 246, 233], DEEP = [36, 28, 84];
+  const H2 = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+  PAL.nb = 1;
+  // finer rainbow for the wordmark's short strokes: 21 steps round the same wheel
+  const PALZ = []; for (let i = 0; i < PAL.length * 3; i++) PALZ.push(mix(PAL[Math.floor(i / 3)], PAL[(Math.floor(i / 3) + 1) % PAL.length], (i % 3) / 3)); PALZ.nb = 3;
+  let PALC = PAL;
+  const palAt = j => PALC[((j % PALC.length) + PALC.length) % PALC.length];
+  const QUIET = 0.45;
+  let SOFT = 1;   // 1 = full contrast between bristle marks; lower = quieter paint
+  const R0 = 64, TIPLEN = 0.5, CX = 56, CS = 76; // sprite: tip half-width in px, half-length ratio, canvas half-sizes (along, across)
+  const VARS = 2, DRY_LEVELS = 12;
+
+  function makeTipLayout(N, seed) {
+    const D = [];
+    for (let k = 0; k < N; k++) {
+      const r = j => H2(k * 1.37 + seed, j * 9.1 + seed * 0.3);
+      const rad = Math.sqrt(r(1)), th = r(2) * Math.PI * 2;
+      const y = rad * Math.sin(th), xx = rad * Math.cos(th) * TIPLEN;   // y: across the brush (-1..1), xx: along it
+      const kr = r(3), kind = kr < 0.16 ? 1 : kr < 0.27 ? 2 : 0;       // 1 light, 2 dark
+      D.push({ x: xx, y, kind, r: kind ? 0.025 + r(4) * 0.05 : 0.045 + r(4) * 0.085, a: 0.55 + r(5) * 0.45,
+        hue: (r(6) - 0.5) * 2, tone: (r(7) - 0.5) * 2,
+        thr: Math.max(0.03, 0.14 + 0.78 * r(8) - 0.32 * Math.abs(y) ** 3) });
+    }
+    return D;
+  }
+  function tipSprite(layout, j, v) {
+    const c = document.createElement('canvas'); c.width = CX * 2; c.height = CS * 2; const g = c.getContext('2d');
+    const base = palAt(j), tv = (H2(j, v * 3.3) - 0.5) * 0.3 * SOFT;        // each load is a touch lighter or darker
+    const body = tv > 0 ? mix(base, WHITE, tv) : mix(base, DEEP, -tv);
+    g.translate(CX, CS);
+    // body of wet paint, soft at the edge
+    g.save(); g.scale(TIPLEN * 0.92, 0.86);
+    const bg = g.createRadialGradient(0, 0, 0, 0, 0, R0);
+    bg.addColorStop(0, `rgba(${body.map(x => x | 0)},0.96)`); bg.addColorStop(0.78, `rgba(${body.map(x => x | 0)},0.94)`); bg.addColorStop(1, `rgba(${body.map(x => x | 0)},0)`);
+    g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R0, 0, Math.PI * 2); g.fill(); g.restore();
+    // broad patches: the brush picked up some of the neighbouring colour, some white, some shadow
+    for (let m = 0; m < 6; m++) {
+      const q = n => H2(m * 5.1 + j * 1.9 + n, v * 7.3 + n * 0.61);
+      const rad = Math.sqrt(q(1)) * 0.7, th = q(2) * Math.PI * 2;
+      const px = rad * Math.cos(th) * TIPLEN * R0, py = rad * Math.sin(th) * R0 * 0.85, rr = (0.26 + q(3) * 0.26) * R0;
+      const w = q(4), col = (w < 0.4 ? mix(base, palAt(j + PALC.nb), 0.45 + q(5) * 0.4) : w < 0.7 ? mix(base, palAt(j - PALC.nb), 0.45 + q(5) * 0.4)
+        : w < 0.87 ? mix(base, WHITE, 0.3 + q(5) * 0.3) : mix(base, DEEP, 0.25 + q(5) * 0.25)).map(x => x | 0);
+      const al = (0.4 + q(6) * 0.3) * SOFT;
+      g.save(); g.translate(px, py); g.scale(TIPLEN, 0.42);
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr);
+      gr.addColorStop(0, `rgba(${col},${al})`); gr.addColorStop(0.55, `rgba(${col},${al * 0.8})`); gr.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    // bristle marks: each carries the load colour pushed towards a neighbouring hue, white or a deep blue
+    for (let k = 0; k < layout.length; k++) {
+      const d = layout[k], q = H2(k + v * 31.7, j * 0.77);           // re-rolled per variant
+      let col = mix(base, palAt(j + (d.hue > 0 ? PALC.nb : -PALC.nb)), Math.abs(d.hue) * 0.42 * SOFT);
+      if (d.kind === 1) col = mix(col, WHITE, (0.32 + q * 0.38) * SOFT);
+      else if (d.kind === 2) col = mix(col, DEEP, (0.25 + q * 0.3) * SOFT);
+      else { const tn = d.tone * 0.6 * SOFT + tv; col = tn > 0 ? mix(col, WHITE, tn * 0.45) : mix(col, DEEP, -tn * 0.34); }
+      const px = d.x * R0 * 0.8, py = d.y * R0, rr = d.r * R0, cs = col.map(x => x | 0);
+      // a bristle touch, longer than it is wide
+      g.save(); g.translate(px, py); g.scale(2.6, 1);
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, rr);
+      gr.addColorStop(0, `rgba(${cs},${d.a})`); gr.addColorStop(0.5, `rgba(${cs},${d.a * 0.85})`); gr.addColorStop(1, `rgba(${cs},0)`);
+      g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    return c;
+  }
+  // dry-brush comb: at dryness d, the tracks of bristles that have run out are scraped clear
+  const EW = 10;
+  function combSprite(layout, d) {
+    const c = document.createElement('canvas'); c.width = EW; c.height = CS * 2; const g = c.getContext('2d');
+    for (const b of layout) {
+      const over = d - b.thr; if (over <= 0) continue;
+      const hw = b.r * R0 * (0.22 + 2.8 * over), a = Math.min(1, over * 4), y = CS + b.y * R0;
+      const gr = g.createLinearGradient(0, y - hw, 0, y + hw);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.3, `rgba(0,0,0,${a})`); gr.addColorStop(0.7, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, y - hw, EW, hw * 2);
+    }
+    if (d > 0.8) { g.globalAlpha = Math.min(1, (d - 0.8) / 0.2) ** 2; g.fillStyle = '#000'; g.fillRect(0, 0, EW, CS * 2); }
+    return c;
+  }
+  let TIP = null;
+  function buildTip(N) {
+    const layout = makeTipLayout(N, 11);
+    TIP = { N, layout, sprites: new Map(), combs: [] };
+    for (let i = 0; i <= DRY_LEVELS; i++) TIP.combs.push(i ? combSprite(layout, i / DRY_LEVELS) : null);
+  }
+  // Sprites are cached per colour, variant and dryness. A dry sprite is the wet one with the
+  // tracks of the bristles that have run out scraped clear.
+  const spriteFor = (j, v, lvl) => {
+    const jj = ((j % PALC.length) + PALC.length) % PALC.length, key = (jj * VARS + v) * (DRY_LEVELS + 1) + lvl;
+    let sp = TIP.sprites.get(key);
+    if (!sp) {
+      if (!lvl) sp = tipSprite(TIP.layout, jj, v);
+      else {
+        sp = document.createElement('canvas'); sp.width = CX * 2; sp.height = CS * 2; const g = sp.getContext('2d');
+        g.drawImage(spriteFor(jj, v, 0), 0, 0);
+        g.globalCompositeOperation = 'destination-out'; g.drawImage(TIP.combs[lvl], 0, 0, CX * 2, CS * 2);
+      }
+      TIP.sprites.set(key, sp);
+    }
+    return sp;
+  };
+
+  // g: 2D context in device pixels. P: points {x, y, nx, ny, s, hw, age}. k, ox, oy map P to pixels.
+  function stampPath(g, P, n, k, ox, oy, o) {
+    let carry = 0;
+    for (let i = 0; i < n - 1; i++) {
+      const A = P[i], B = P[i + 1], seg = B.s - A.s; if (seg <= 0) continue;
+      const sp = Math.max(o.minSp / k, 0.045 * A.hw);
+      for (let dd = carry; dd < seg; dd += sp) {
+        const q = dd / seg, s = A.s + dd;
+        const x = A.x + (B.x - A.x) * q, y = A.y + (B.y - A.y) * q, age = A.age + (B.age - A.age) * q;
+        let nx = A.nx + (B.nx - A.nx) * q, ny = A.ny + (B.ny - A.ny) * q; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+        // which load of paint is this?
+        const u = (s + o.warp * o.band * 0.2 * sn(s * 2.32 / o.band, 1.3)) / o.band, f = u - Math.floor(u), j = o.fixJ === undefined ? Math.floor(u) : o.fixJ;
+        const press = 1.07 - 0.13 * f + 0.05 * (H2(j, 4.2) - 0.5);       // pressed down at the start of a dab, lifting towards the end
+        const hw = (A.hw + (B.hw - A.hw) * q) * press, sc = hw * k / R0;
+        const an = (H2(j, 8.8) - 0.5) * 0.22, ca = Math.cos(an), sa = Math.sin(an);   // each dab sits at a slightly different angle
+        const tx = ny, ty = -nx;
+        const ax = (tx * ca + nx * sa) * sc, ay = (ty * ca + ny * sa) * sc, bx = (nx * ca - tx * sa) * sc, by = (ny * ca - ty * sa) * sc;
+        // dryness: end of the load, and age of the trail
+        const dB = f > 0.35 ? (f - 0.35) / 0.65 : 0, dA = age > o.wet ? (age - o.wet) / (1 - o.wet) : 0;
+        const d = Math.min(1, Math.max(dB * dB * o.loadDry, dA * (0.5 + 0.5 * dA)) * o.dry + (dA > 0.92 ? (dA - 0.92) * 12.5 : 0));
+        const lvl = Math.round(d * DRY_LEVELS);
+        if (lvl >= DRY_LEVELS) continue;
+        g.setTransform(ax, ay, bx, by, ox + x * k, oy + y * k);
+        if (o.fade) g.globalAlpha = A.al + (B.al - A.al) * q;
+        g.drawImage(spriteFor(j, Math.floor(H2(j, 1.7) * VARS), lvl), -CX, -CS);
+      }
+      carry = Math.max(0, carry + Math.ceil((seg - carry) / sp) * sp - seg);
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+  }
+
+  // The 0 of the wordmark, painted with the same brush: one stroke around the ring, seven
+  // loads of colour. Rendered once into an image and clipped by the glyph.
+  function paintZero() {
+    const els = [...document.querySelectorAll('.zero')]; if (!els.length) return;
+    if (!TIP) buildTip(O.bristles);
+    const cs = getComputedStyle(els[0]);
+    const m = document.createElement('canvas').getContext('2d'); m.font = `${cs.fontWeight} 200px ${cs.fontFamily}`;
+    const mt = m.measureText('0'), e = v => v / 200;
+    const fa = e(mt.fontBoundingBoxAscent || 190), fd = e(mt.fontBoundingBoxDescent || 50);
+    const gl = e(mt.actualBoundingBoxLeft), gr = e(mt.actualBoundingBoxRight), ga = e(mt.actualBoundingBoxAscent), gd = e(mt.actualBoundingBoxDescent);
+    const K = 520, TW = Math.ceil(e(mt.width) * K), TH = Math.ceil((fa + fd) * K);
+    const cx = (gr - gl) / 2 * K, cy = (fa - (ga - gd) / 2) * K, hW = (gl + gr) / 2 * K, hH = (ga + gd) / 2 * K;
+    const c = document.createElement('canvas'); c.width = TW; c.height = TH; const g = c.getContext('2d');
+    g.fillStyle = rgb(PAL[5]); g.fillRect(0, 0, TW, TH);
+    const mainSprites = TIP.sprites; TIP.sprites = new Map(); PALC = PALZ; SOFT = QUIET;
+    const A = 0.8 * hW, Bq = 0.9 * hH, TAU = Math.PI * 2, NZ = PALZ.length;
+    const ring = th => {
+      const X = cx + A * Math.cos(th), Y = cy + Bq * Math.sin(th);
+      let nx = Bq * Math.cos(th), ny = A * Math.sin(th); const L = Math.hypot(nx, ny); return [X, Y, nx / L, ny / L];
+    };
+    // underpainting: one stroke round the ring so nothing shows through
+    { const P = [], M = 360, hw = 0.4 * hW; let sAcc = 0, px = 0, py = 0;
+      for (let i = 0; i <= M * 1.07; i++) {
+        const [X, Y, nx, ny] = ring(-2 + i / M * TAU);
+        if (i) sAcc += Math.hypot(X - px, Y - py); px = X; py = Y;
+        P.push({ x: X, y: Y, nx, ny, s: sAcc, hw, age: 0, al: i > M ? Math.max(0, 1 - (i - M) / (M * 0.07)) : 1 });
+      }
+      stampPath(g, P, P.length, 1, 0, 0, { band: P[M].s / NZ, warp: 0, wet: 1, loadDry: 0, dry: 0, minSp: 1.2, fade: true }); }
+    // then many very short strokes on top, each its own touch of the brush: colour follows the
+    // rainbow round the ring, nudged a step or two so neighbours differ
+    const dabs = [], lanes = [-0.2, -0.07, 0.07, 0.2], PER = 34;
+    lanes.forEach((ln, li) => { for (let i = 0; i < PER; i++) dabs.push({ th: (i + H2(i, li * 3.7)) / PER * TAU, ln: ln + (H2(i + 50, li) - 0.5) * 0.08, id: li * 100 + i }); });
+    dabs.sort((p, q) => H2(p.id, 9.1) - H2(q.id, 9.1));
+    for (const d of dabs) {
+      const r = n => H2(d.id * 1.31 + n, n * 4.7);
+      const [X0, Y0, nx0, ny0] = ring(d.th), hw = hW * (0.1 + r(1) * 0.05), len = hw * (2.2 + r(2) * 1.6);
+      let dir = Math.atan2(nx0, -ny0) + (r(3) - 0.5) * 0.9; const bend = (r(4) - 0.5) * 0.5;
+      if (r(5) < 0.5) dir += Math.PI;                                  // some strokes go the other way
+      let X = X0 + nx0 * d.ln * hW - Math.cos(dir) * len / 2, Y = Y0 + ny0 * d.ln * hW - Math.sin(dir) * len / 2;
+      const P = [], NP = 12;
+      for (let i = 0; i <= NP; i++) {
+        const a2 = dir + bend * (i / NP - 0.5), q = i / NP;
+        P.push({ x: X, y: Y, nx: -Math.sin(a2), ny: Math.cos(a2), s: len * q, hw: hw * (0.82 + 0.3 * Math.sin(Math.PI * Math.min(1, q * 1.4))), age: 0, al: q > 0.78 ? (1 - q) / 0.22 : 1 });
+        X += Math.cos(a2) * len / NP; Y += Math.sin(a2) * len / NP;
+      }
+      const jz = Math.round(((d.th + 2) / TAU) * NZ + (r(6) - 0.5) * 1.6);
+      stampPath(g, P, P.length, 1, 0, 0, { band: len * 1.001, warp: 0, wet: 1, loadDry: 0.15, dry: 1, minSp: 1, fade: true, fixJ: jz });
+    }
+    TIP.sprites = mainSprites; PALC = PAL; SOFT = 1;
+    c.toBlob(b => { if (!b) return; const url = URL.createObjectURL(b);
+      els.forEach(z => { if (z.dataset.shared) { z.dataset.bg = `url("${url}")`; return; } z.style.backgroundImage = `url("${url}")`; z.style.backgroundSize = '100% 100%'; z.style.backgroundRepeat = 'no-repeat'; }); });
+  }
+
+  // A field of the same short strokes for the f: mostly upright touches, colour running through
+  // the rainbow from top to bottom. One image, clipped by whatever f it is put behind.
+  window.f0PaintField = function (shared) {
+    if (!TIP) buildTip(O.bristles);
+    const TW = shared ? 1040 : 600, TH = 800, c = document.createElement('canvas'); c.width = TW; c.height = TH; const g = c.getContext('2d');
+    const mainSprites = TIP.sprites; TIP.sprites = new Map(); PALC = PALZ; SOFT = QUIET; const NZ = PALZ.length;
+    // which colour belongs at a point: down the letter for the f alone; for the shared painting,
+    // one rainbow flowing across the whole wordmark, tilted a little
+    const hueAt = (px, py) => shared ? (px / TW) * 0.9 * NZ + (1 - py / TH) * 0.3 * NZ + 12 : py / TH * NZ + 9;
+    const dirAt = (px, py) => shared ? -0.45 + 0.8 * Math.sin(px / TW * 4.2 + py / TH * 2.6) : -1.35;
+    for (let i = 0; i < 60; i++) for (let k2 = 0; k2 < 46; k2++) { g.fillStyle = rgb(PALZ[((Math.floor(hueAt((i + 0.5) * TW / 60, (k2 + 0.5) * TH / 46)) % NZ) + NZ) % NZ]); g.fillRect(i * TW / 60, k2 * TH / 46, TW / 60 + 1, TH / 46 + 1); }
+    const hw0 = 24, dabs = [];
+    for (let yy = -20; yy < TH + 20; yy += hw0 * 1.5) for (let xx = -20; xx < TW + 20; xx += hw0 * 1.15) dabs.push([xx, yy, dabs.length]);
+    dabs.sort((p, q) => H2(p[2], 9.1) - H2(q[2], 9.1));
+    for (const [gx, gy, id] of dabs) {
+      const r = n => H2(id * 1.31 + n, n * 4.7), hw = hw0 * (0.8 + r(1) * 0.5), len = hw * (2.2 + r(2) * 1.6);
+      let dir = dirAt(gx, gy) + (r(3) - 0.5) * 0.9; const bend = (r(4) - 0.5) * 0.5; if (r(5) < 0.5) dir += Math.PI;
+      let X = gx + (r(7) - 0.5) * hw - Math.cos(dir) * len / 2, Y = gy + (r(8) - 0.5) * hw - Math.sin(dir) * len / 2;
+      const P = [], NP = 12;
+      for (let i = 0; i <= NP; i++) {
+        const a2 = dir + bend * (i / NP - 0.5), q = i / NP;
+        P.push({ x: X, y: Y, nx: -Math.sin(a2), ny: Math.cos(a2), s: len * q, hw: hw * (0.82 + 0.3 * Math.sin(Math.PI * Math.min(1, q * 1.4))), age: 0, al: q > 0.78 ? (1 - q) / 0.22 : 1 });
+        X += Math.cos(a2) * len / NP; Y += Math.sin(a2) * len / NP;
+      }
+      stampPath(g, P, P.length, 1, 0, 0, { band: len * 1.001, warp: 0, wet: 1, loadDry: 0.15, dry: 1, minSp: 1, fade: true, fixJ: Math.round(hueAt(gx, gy) + (r(6) - 0.5) * 1.6) });
+    }
+    TIP.sprites = mainSprites; PALC = PAL; SOFT = 1;
+    return c;
+  };
+
+  // A whole sheet painted for the wordmark. c.hue(u, v) says which colour of the 21-step rainbow
+  // belongs at a point (u, v from 0 to 1); c.dir(u, v) says which way the strokes run there.
+  const sheetMaps = {};
+  window.f0Sheet = function (c) {
+    if (!TIP) buildTip(O.bristles);
+    const TW = 1040, TH = 800, cv2 = document.createElement('canvas'); cv2.width = TW; cv2.height = TH; const g = cv2.getContext('2d');
+    const main = TIP.sprites; TIP.sprites = sheetMaps[c.soft] || (sheetMaps[c.soft] = new Map()); PALC = PALZ; SOFT = c.soft; const NZ = PALZ.length;
+    for (let i = 0; i < 80; i++) for (let k2 = 0; k2 < 60; k2++) { g.fillStyle = rgb(PALZ[((Math.floor(c.hue((i + 0.5) / 80, (k2 + 0.5) / 60)) % NZ) + NZ) % NZ]); g.fillRect(i * TW / 80, k2 * TH / 60, TW / 80 + 1, TH / 60 + 1); }
+    const hw0 = c.hw, dabs = [];
+    for (let yy = -hw0; yy < TH + hw0; yy += hw0 * 1.5 * (c.gap || 1)) for (let xx = -hw0; xx < TW + hw0; xx += hw0 * 1.15 * (c.gap || 1)) dabs.push([xx, yy, dabs.length]);
+    dabs.sort((p, q) => H2(p[2], 9.1) - H2(q[2], 9.1));
+    for (const [gx, gy, id] of dabs) {
+      const r = n => H2(id * 1.31 + n, n * 4.7), hw = hw0 * (0.8 + r(1) * 0.5), len = hw * (c.len[0] + r(2) * (c.len[1] - c.len[0]));
+      const off = (r(3) - 0.5) * c.jit + (r(5) < 0.5 ? Math.PI : 0), bend = (r(4) - 0.5) * (c.bend === undefined ? 0.5 : c.bend);
+      const NP = Math.max(12, Math.ceil(len / (hw * 0.4))), P = [];
+      let X = gx + (r(7) - 0.5) * hw, Y = gy + (r(8) - 0.5) * hw, a0 = c.dir(X / TW, Y / TH) + off; X -= Math.cos(a0) * len / 2; Y -= Math.sin(a0) * len / 2;
+      for (let i = 0; i <= NP; i++) {
+        const q = i / NP, a2 = (c.follow ? c.dir(X / TW, Y / TH) + off : a0) + bend * (q - 0.5);
+        P.push({ x: X, y: Y, nx: -Math.sin(a2), ny: Math.cos(a2), s: len * q, hw: hw * (0.82 + 0.3 * Math.sin(Math.PI * Math.min(1, q * 1.4))), age: 0, al: q > 0.78 ? (1 - q) / 0.22 : 1 });
+        X += Math.cos(a2) * len / NP; Y += Math.sin(a2) * len / NP;
+      }
+      stampPath(g, P, P.length, 1, 0, 0, { band: len * 1.001, warp: 0, wet: 1, loadDry: c.dry === undefined ? 0.15 : c.dry, dry: 1, minSp: 1, fade: true, fixJ: Math.round(c.hue(gx / TW, gy / TH) + (r(6) - 0.5) * c.hj) });
+    }
+    TIP.sprites = main; PALC = PAL; SOFT = 1;
+    return cv2;
+  };
+
+  paintZero();
+  if (document.fonts && document.fonts.load) document.fonts.load("500 100px 'Alpina'").then(paintZero, () => {});
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+
+  // ---------- motion: a small ring whose shape flutters slightly ----------
+  const DOT = 0.05, LIFE = 0.97 * 2 * Math.PI / (3.0 * O.speed);
+  let x = 0, y = 0, t = 0, ph = Math.random() * 6.28, flutU = 0, flutV = 0, flutAmp = 0;
+  const pts = [];
+  function step(dt) {
+    t += dt; ph += 3.0 * O.speed * dt;
+    flutV += (-flutV * 2.2 * O.fspeed) * dt + gauss() * 6 * O.fspeed * Math.sqrt(dt);
+    flutU += flutV * dt;
+    flutAmp = O.flutter * (0.25 + 0.2 * sn(t * 0.23, 13.1));
+    const amp = flutAmp, tt = flutU;
+    const r = DOT * O.dot * 2.0 * (1 + 0.45 * amp * sn(tt, 0.3));
+    const ecc = 0.3 * amp * sn(tt * 0.8, 1.9), rot = tt * 1.3 + sn(tt * 0.5, 4.1) * 1.2;
+    const lobe = 0.18 * amp * Math.max(0, sn(tt * 0.7, 2.6));
+    const cx = 0.05 * amp * sn(tt * 0.6, 5.2), cy = 0.05 * amp * sn(tt * 0.6, 7.7);
+    const ex = Math.cos(ph) * (1 + ecc) * (1 + lobe * Math.cos(3 * ph)) * r;
+    const ey = Math.sin(ph) * (1 - ecc) * (1 + lobe * Math.cos(3 * ph)) * r;
+    const c = Math.cos(rot), s = Math.sin(rot);
+    x = cx + ex * c - ey * s; y = cy + ex * s + ey * c;
+  }
+  // the brush turns to follow the path, but lazily, like a real one
+  let oriX = 1, oriY = 0, lastNx = 0, lastNy = 1;
+  function pushPt() {
+    const lp = pts[pts.length - 1], w = DOT * O.dot;
+    if (!lp) { pts.push({ x, y, nx: 0, ny: 1, w, t, s: 0 }); return; }
+    const dx = x - lp.x, dy = y - lp.y, d = Math.hypot(dx, dy);
+    if (d <= 0.007) return;
+    const th = Math.atan2(dy, dx), k = 1 - Math.exp(-d / 0.06);
+    oriX += (Math.cos(2 * th) - oriX) * k; oriY += (Math.sin(2 * th) - oriY) * k;
+    const a = Math.atan2(oriY, oriX) / 2; let nx = -Math.sin(a), ny = Math.cos(a);
+    if (nx * lastNx + ny * lastNy < 0) { nx = -nx; ny = -ny; }
+    lastNx = nx; lastNy = ny;
+    pts.push({ x, y, nx, ny, w, t, s: lp.s + d });
+  }
+
+  let W = 1;
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.max(32, Math.round(r.width * dpr)); cv.width = cv.height = W;
+  }
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, W);
+    const n0 = pts.length; if (n0 < 3) return;
+    const lp = pts[n0 - 1], hd = Math.hypot(x - lp.x, y - lp.y);
+    const P = hd > 1e-4 ? pts.concat([{ x, y, nx: lp.nx, ny: lp.ny, w: lp.w, t, s: lp.s + hd }]) : pts, n = P.length;
+    for (let i = 0; i < n; i++) {
+      const p = P[i]; p.age = Math.min(1, Math.max(0, (t - p.t) / LIFE));
+      p.hw = p.w * O.width * (1 + 0.05 * sn(p.s * 9, 2.2));
+    }
+    stampPath(ctx, P, n, W / 2 / VIEW, W / 2, W / 2, { band: O.band, warp: 1, wet: 0.45, loadDry: 0.2, dry: O.dry, minSp: 1.2 });
+  }
+
+  const H = 1 / 240;
+  const advance = dt => { for (let a = dt; a > 0; a -= H) { step(H); pushPt(); } while (pts.length && t - pts[0].t > LIFE) pts.shift(); };
+  advance(9);                                            // start with a full ring already painted
+  resize(); draw();
+  if (window.ResizeObserver) new ResizeObserver(() => { resize(); draw(); }).observe(cv);
+
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;   // a still painting
+  let last = 0, visible = true;
+  if (window.IntersectionObserver) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(cv);
+  function frame(now) {
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
+    if (visible && dt) { advance(dt); draw(); }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+</script>
+<script>
+(() => {
+  const TAU = Math.PI * 2, N = 21, sn = (u, s) => Math.sin(u + s) * 0.5 + Math.sin(u * 1.618 + s * 2.3) * 0.3 + Math.sin(u * 2.718 + s * 3.7) * 0.2;
+  // how the rainbow is laid out (u, v run 0 to 1 across the wordmark; the 0 sits around u 0.68)
+  const L = {
+    diag:   (u, v) => (u * 0.9 + (1 - v) * 0.3) * N + 12,
+    across: (u, v) => u * N + 12,
+    down:   (u, v) => v * N + 9,
+    wheel:  (u, v) => Math.atan2(v - 0.5, (u - 0.5) * 1.3) / TAU * N + 14,
+    wheel0: (u, v) => Math.atan2(v - 0.52, (u - 0.68) * 1.3) / TAU * N + 5,
+    rings:  (u, v) => Math.hypot((u - 0.5) * 1.3, v - 0.5) * 2.1 * N + 3,
+    waves:  (u, v) => (u * 0.8 + 0.1 * Math.sin(v * 9 + u * 5)) * N + 12,
+    twice:  (u, v) => u * N * 2 + 12,
+    patch:  (u, v) => 10 + 9 * sn(u * 7.3, 1.1) + 7 * sn(v * 6.1 + u * 2.2, 2.7),
+  };
+  // which way the strokes run
+  const D = {
+    flow:  (u, v) => -0.45 + 0.8 * Math.sin(u * 4.2 + v * 2.6),
+    up:    () => -1.45, flat: () => 0.05,
+    round: (cu, cv) => (u, v) => Math.atan2(v - cv, (u - cu) * 1.3) + Math.PI / 2,
+    swirl: (u, v) => 3.2 * sn(u * 6.5, 0.4) + 3.2 * sn(v * 5.5 + u * 1.7, 3.3),
+    along: h => (u, v) => { const e = 0.01, gx = (h(u + e, v) - h(u - e, v)) / 1040, gy = (h(u, v + e) - h(u, v - e)) / 800; return Math.atan2(gx, -gy); },
+  };
+  const quiet = { hw: 24, len: [2.2, 3.8], jit: 0.9, hj: 1.6, soft: 0.45 };
+  const V = [
+    ['Quiet strokes', 'rainbow on a slant', { ...quiet, hue: L.diag, dir: D.flow }],
+    ['Quiet strokes', 'rainbow left to right', { ...quiet, hue: L.across, dir: D.flow }],
+    ['Quiet strokes', 'rainbow top to bottom', { ...quiet, hue: L.down, dir: D.flow }],
+    ['Quiet strokes', 'colour wheel round the middle', { ...quiet, hue: L.wheel, dir: D.round(0.5, 0.5) }],
+    ['Quiet strokes', 'colour wheel round the 0', { ...quiet, hue: L.wheel0, dir: D.round(0.68, 0.52) }],
+    ['Quiet strokes', 'rings spreading out', { ...quiet, hue: L.rings, dir: D.round(0.5, 0.5) }],
+    ['Long flowing strokes', 'rainbow on a slant', { hw: 20, len: [7, 13], jit: 0.25, hj: 1.2, soft: 0.5, bend: 0.2, follow: true, hue: L.diag, dir: D.along(L.diag) }],
+    ['Long flowing strokes', 'wavy bands', { hw: 20, len: [7, 13], jit: 0.2, hj: 1.2, soft: 0.5, bend: 0.1, follow: true, hue: L.waves, dir: D.along(L.waves) }],
+    ['Swirls', 'rainbow on a slant', { hw: 20, len: [5, 9], jit: 0.3, hj: 1.8, soft: 0.6, follow: true, hue: L.diag, dir: D.swirl }],
+    ['Swirls', 'colour wheel round the 0', { hw: 20, len: [5, 9], jit: 0.3, hj: 1.8, soft: 0.6, follow: true, hue: L.wheel0, dir: D.swirl }],
+    ['Tiny dabs', 'rainbow left to right', { hw: 13, len: [1.3, 2], jit: 3, hj: 3.2, soft: 0.6, dry: 0, hue: L.across, dir: D.flow }],
+    ['Tiny dabs', 'patches of colour, like a garden', { hw: 13, len: [1.3, 2], jit: 3, hj: 3, soft: 0.6, dry: 0, hue: L.patch, dir: D.flow }],
+    ['Broad strokes', 'rainbow on a slant', { hw: 46, len: [2.4, 4], jit: 0.6, hj: 1.6, soft: 0.5, hue: L.diag, dir: D.flow }],
+    ['Broad flat strokes', 'bands top to bottom, like a sunset', { hw: 40, len: [4, 7], jit: 0.2, hj: 1.4, soft: 0.5, bend: 0.1, hue: L.down, dir: D.flat }],
+    ['Bold impasto', 'rainbow on a slant', { ...quiet, soft: 1, hj: 3, dry: 0.5, hue: L.diag, dir: D.flow }],
+    ['Bold impasto', 'colour wheel round the 0', { ...quiet, soft: 1, hj: 3, dry: 0.5, hue: L.wheel0, dir: D.round(0.68, 0.52) }],
+    ['Smooth blend', 'rainbow left to right', { hw: 44, len: [3, 5], jit: 0.5, hj: 0.4, soft: 0.14, dry: 0, hue: L.across, dir: D.flow }],
+    ['Smooth blend', 'colour wheel round the middle', { hw: 44, len: [3, 5], jit: 0.5, hj: 0.4, soft: 0.14, dry: 0, hue: L.wheel, dir: D.round(0.5, 0.5) }],
+    ['Upright strokes', 'the rainbow twice across', { ...quiet, jit: 0.35, hue: L.twice, dir: D.up }],
+    ['Dry and scratchy', 'rainbow on a slant', { ...quiet, soft: 0.8, dry: 1.6, hj: 2.4, hue: L.diag, dir: D.flow }],
+  ];
+  const grid = document.getElementById('grid'), els = V.map(([name, note], i) => {
+    const f = document.createElement('figure'); f.className = 'tile';
+    f.innerHTML = `<div class="wm" aria-label="f0"><span class="eff">f</span><span class="z0">0</span></div><figcaption><b>${String(i + 1).padStart(2, '0')}</b><b>${name}</b><span>${note}</span></figcaption>`;
+    grid.appendChild(f); return f.querySelector('.wm');
+  });
+  const urls = []; let mode = 'one';
+  // one: both letters are windows onto the same sheet. sep: each letter gets the whole sheet to itself.
+  function place(i) {
+    const url = urls[i]; if (!url) return;
+    const e = els[i].querySelector('.eff'), z = els[i].querySelector('.z0'), re = e.getBoundingClientRect(), rz = z.getBoundingClientRect(), pad = parseFloat(getComputedStyle(e).paddingLeft);
+    const T = Math.min(re.top, rz.top) + re.height * 0.12, B = Math.max(re.bottom, rz.bottom) - re.height * 0.1;
+    const boxes = mode === 'one' ? (() => { const Lx = Math.min(re.left + pad, rz.left), R = Math.max(re.right - pad, rz.right); return [[Lx, R], [Lx, R]]; })() : [[re.left + pad, re.right - pad * 0.5], [rz.left, rz.right]];   // the f's arm reaches past its own width
+    [[e, re], [z, rz]].forEach(([el, r], k) => {
+      const black = mode === 'black' && k === 0; el.classList.toggle('ink', black); el.classList.toggle('on', !black);
+      el.style.backgroundImage = black ? 'none' : `url("${url}")`; el.style.backgroundSize = `${(boxes[k][1] - boxes[k][0]).toFixed(1)}px ${(B - T).toFixed(1)}px`;
+      el.style.backgroundPosition = `${(boxes[k][0] - r.left).toFixed(1)}px ${(T - r.top).toFixed(1)}px`;
+    });
+  }
+  document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => { mode = b.dataset.m; document.querySelectorAll('#modes button').forEach(x => x.setAttribute('aria-pressed', x === b)); els.forEach((_, i) => place(i)); }));
+  (async () => {
+    try { await document.fonts.load("500 136px 'AlpinaM'", 'f0'); } catch (e) {}
+    for (let i = 0; i < V.length; i++) {
+      const url = await new Promise(r => window.f0Sheet(V[i][2]).toBlob(b => r(URL.createObjectURL(b))));
+      urls[i] = url; place(i);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    document.body.setAttribute('data-done', '1');
+  })();
+})();
+</script>
+</body>
+</html>
