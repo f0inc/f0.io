@@ -2,8 +2,9 @@
   "name": "f0.io",
   "private": true,
   "scripts": {
-    "build": "rm -rf dist && mkdir dist && cp -r index.html paint.css favicon.png fonts dist/",
-    "deploy": "wrangler deploy"
+    "build": "rm -rf dist && mkdir dist && cp -r index.html paint.css favicon.png og.png fonts dist/",
+    "deploy": "wrangler deploy",
+    "og": "chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --allow-file-access-from-files --window-size=1200,630 --virtual-time-budget=3000 --screenshot=og.png file://$PWD/og/card.html"
   },
   "devDependencies": {
     "wrangler": "4.166.0"
