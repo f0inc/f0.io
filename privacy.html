@@ -38,7 +38,7 @@
   .reset:hover { border-color: var(--muted); }
   @media (max-width: 480px) { main { padding-top: 40px; } h1 { font-size: 28px; } }
   /* cookie consent: same card as on the home page */
-  .consent { position: fixed; z-index: 50; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(380px, calc(100vw - 32px));
+  .consent { position: fixed; z-index: 50; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(380px, calc(100vw - 32px));
     padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0,0,0,.12); font-size: 15px; line-height: 1.4; }
   .consent[hidden] { display: none; }
