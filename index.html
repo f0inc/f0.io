@@ -91,8 +91,8 @@
     <li><strong>$0.01 a minute</strong>, LLM included</li>
   </ul>
 
-  <!-- Sign-ups go to Loops. Paste the form endpoint from Loops (Forms → Settings) into action. -->
-  <form class="signup" method="post" action="https://app.loops.so/api/newsletter-form/LOOPS_FORM_ID">
+  <!-- Sign-ups go to Loops (form endpoint from Loops: Forms → Settings). -->
+  <form class="signup" method="post" action="https://app.loops.so/api/newsletter-form/cmwt81hra1xqu0j3ouqsp1lkn">
     <label class="vh" for="email">Email</label>
     <input id="email" type="email" name="email" placeholder="you@company.com" autocomplete="email" required>
     <input type="hidden" name="userGroup" value="early access">
@@ -138,7 +138,6 @@
   form.addEventListener('submit', async e => {
     e.preventDefault();
     if (btn.disabled) return;
-    if (form.action.includes('LOOPS_FORM_ID')) return say('Sign-ups open soon.');
     btn.disabled = true; say('');
     try {
       const res = await fetch(form.action, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
