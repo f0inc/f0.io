@@ -1,0 +1,13 @@
+// f0.io: a static site on Cloudflare Workers (Workers Builds). Deploy command: `npx wrangler deploy`.
+// The build copies only what the landing page serves into dist/; brush.js, paint/ and labs/ stay in git only.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "f0-io",
+  "compatibility_date": "2026-11-01",
+  "build": {
+    "command": "npm run build"
+  },
+  "assets": {
+    "directory": "./dist"
+  }
+}

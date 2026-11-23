@@ -1,0 +1,11 @@
+{
+  "name": "f0.io",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf dist && mkdir dist && cp -r index.html paint.css favicon.png fonts dist/",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.166.0"
+  }
+}

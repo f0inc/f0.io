@@ -1,7 +1,6 @@
-# Licensed separately: do not commit until the Grilli Type web/desktop licences are bought.
-# The fonts here now are TRIAL files, and favicon.png was rendered from the trial font.
-fonts/*.woff2
-favicon.png
+# fonts/ and favicon.png are Grilli Type TRIAL files (favicon.png was rendered from the trial font),
+# committed only so the team can preview the site. Buy the web licences, or remove them, before launch.
 labs/img/
-overtones/fonts/
-overtones/favicon.png
+node_modules/
+.wrangler/
+dist/
