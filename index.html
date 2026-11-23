@@ -76,6 +76,16 @@
   a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
   a:hover { color: var(--muted); }
   @media (max-width: 480px) { main { padding-top: 48px; } body { font-size: 17px; } .logo { font-size: 56px; } }
+  /* cookie consent: a small card in the corner, shown only when analytics is on and the visitor has not chosen yet */
+  .consent { position: fixed; z-index: 50; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(380px, calc(100vw - 32px));
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.12); font-size: 15px; line-height: 1.4; }
+  .consent[hidden] { display: none; }
+  .consent p { margin: 0; }
+  .consent .btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .consent button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+  .consent button[data-c="yes"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .consent button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -143,12 +153,42 @@
       const res = await fetch(form.action, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(new FormData(form)).toString() });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) { form.classList.add('done'); say("Thanks, you're on the list. We'll be in touch."); return; }
+      if (res.ok && data.success) { form.classList.add('done'); say("Thanks, you're on the list. We'll be in touch."); if (window.posthog && window.posthog.capture) window.posthog.capture('early_access_signup'); return; }
       if (res.status === 429) say('Too many tries, please wait a minute and try again.');
       else if (/already/i.test(data.message || '')) { form.classList.add('done'); say("You're already on the list. We'll be in touch."); return; }
       else say(data.message || 'Something went wrong, please try again.');
     } catch { say('Could not reach the server, please try again.'); }
     btn.disabled = false; input.focus();
+  });
+})();
+</script>
+<div class="consent" id="consent" role="region" aria-label="Cookies" hidden>
+  <p>We use cookies to understand how people use this site.</p>
+  <div class="btns"><button type="button" data-c="no">Decline</button><button type="button" data-c="yes">Accept</button></div>
+</div>
+<script>
+// PostHog analytics (US). Off until KEY is a real project key. Cookieless (in memory only) until the visitor accepts cookies.
+(function () {
+  var KEY = 'phc_REPLACE_ME', HOST = 'https://us.i.posthog.com', ASSETS = 'https://us-assets.i.posthog.com';
+  if (KEY.indexOf('REPLACE') !== -1) return;
+  var STORE = 'f0-cookie-consent';
+  function get() { try { return localStorage.getItem(STORE); } catch (e) { return null; } }
+  function set(v) { try { localStorage.setItem(STORE, v); } catch (e) {} }
+  var choice = get();
+  var s = document.createElement('script');
+  s.async = true; s.crossOrigin = 'anonymous'; s.src = ASSETS + '/static/array.js';
+  s.onload = function () {
+    window.posthog.init(KEY, { api_host: HOST, person_profiles: 'identified_only', persistence: choice === 'yes' ? 'localStorage+cookie' : 'memory' });
+  };
+  document.head.appendChild(s);
+  var banner = document.getElementById('consent');
+  if (!banner || choice) return;
+  banner.hidden = false;
+  banner.addEventListener('click', function (ev) {
+    var c = ev.target.getAttribute && ev.target.getAttribute('data-c');
+    if (!c) return;
+    set(c); banner.hidden = true;
+    if (c === 'yes' && window.posthog && window.posthog.set_config) window.posthog.set_config({ persistence: 'localStorage+cookie' });
   });
 })();
 </script>
