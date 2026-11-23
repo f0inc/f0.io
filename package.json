@@ -2,7 +2,7 @@
   "name": "f0.io",
   "private": true,
   "scripts": {
-    "build": "rm -rf dist && mkdir dist && cp -r index.html paint.css favicon.png og.png fonts dist/",
+    "build": "rm -rf dist && mkdir dist && cp -r index.html privacy.html 404.html sitemap.xml robots.txt paint.css favicon.png og.png fonts dist/",
     "deploy": "wrangler deploy",
     "og": "chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --allow-file-access-from-files --window-size=1200,630 --virtual-time-budget=3000 --screenshot=og.png file://$PWD/og/card.html"
   },
