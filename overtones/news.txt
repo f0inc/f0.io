@@ -1,0 +1,17 @@
+# overtones: one block per day, newest first or in any order.
+# First line of a block is the date. Then one line per story, most important first:
+#   category | headline | link
+# Run `python3 build.py` after editing.
+# The entries below are SAMPLES to show the layout. Replace them.
+
+2026-11-20
+models   | Sample headline: a new speech-to-speech model is released | https://example.com/sample-1
+funding  | Sample headline: a voice agent startup raises a round | https://example.com/sample-2
+research | Sample headline: a paper on turn-taking and interruptions | https://example.org/sample-3
+tools    | Sample headline: an open-source TTS library ships a major version | https://example.com/sample-4
+pricing  | Sample headline: a provider cuts per-minute prices | https://example.net/sample-5
+
+2026-11-19
+product  | Sample headline: a telephony platform adds native voice agents | https://example.com/sample-6
+models   | Sample headline: a faster streaming transcription model | https://example.org/sample-7
+policy   | Sample headline: new rules on AI voices in outbound calls | https://example.net/sample-8

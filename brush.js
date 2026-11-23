@@ -1,6 +1,6 @@
-// f0 wordmark paint.
-// The 0 of the wordmark is filled with a small painting made on load: tiny dabs of a soft
-// brush, colour running through the rainbow from left to right. window.f0Sheet paints it.
+// f0 brush engine. window.f0Sheet(config) paints a sheet of brush strokes and returns a canvas.
+// The site does not load this file: paint/make.py runs it once to bake the paintings into paint.css,
+// so pages show them at once, with nothing painted (and nothing flickering) in the visitor's browser.
 (() => {
   const cv = document.getElementById('mark');
   const O = { speed: 0.25, flutter: 1, fspeed: 0.55, dot: 2, width: 1.1, band: 0.19, dry: 1, bristles: 110 };
@@ -340,44 +340,4 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-})();
-
-
-// Paint the 0 and the Send button. The CSS gradients are the fallbacks.
-(() => {
-  const z = document.querySelector('.logo .zero'); if (!window.f0Sheet) return;
-  const N = 21, TAU = Math.PI * 2, root = document.documentElement;
-  const put = (sheet, fn) => sheet.toBlob(b => { if (b) fn(`url("${URL.createObjectURL(b)}")`); });
-  // a short wait so the text paints first; each sheet takes a fraction of a second to make
-  setTimeout(() => {
-    // the 0: tiny dabs, the rainbow going once round the ring (the sheet is stretched over the 0,
-    // which is narrower than it is tall, hence the 0.73)
-    if (z) put(window.f0Sheet({ hw: 13, len: [1.3, 2], jit: 3, hj: 3.2, soft: 0.6, dry: 0,
-      hue: (u, v) => Math.atan2(v - 0.5, (u - 0.5) * 0.73) / TAU * N + 16, dir: (u, v) => -0.45 + 0.8 * Math.sin(u * 4.2 + v * 2.6) }),
-      u => { z.style.backgroundImage = u; z.classList.add('painted'); });
-    // the Send button: the rainbow spiralling out from the middle, in broad strokes that go round
-    const ang = (u, v) => Math.atan2(v - 0.5, (u - 0.5) * 1.3), rad = (u, v) => Math.hypot((u - 0.5) * 1.3, v - 0.5);
-    put(window.f0Sheet({ hw: 54, len: [2.4, 4], jit: 0.5, hj: 1.4, soft: 0.5, dry: 0, bend: 0.7,
-      hue: (u, v) => ang(u, v) / TAU * N + rad(u, v) * 16 + 3, dir: (u, v) => ang(u, v) + Math.PI / 2 + 0.5 }),
-      u => root.style.setProperty('--paint', u));
-  }, 60);
-})();
-
-// The Send button's painting turns: slowly while hovered or focused, faster for a moment on click.
-(() => {
-  const btn = document.querySelector('.signup button'), p = btn && btn.querySelector('.paint');
-  if (!p || !p.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const an = p.animate([{ transform: 'translate(-50%, -50%) rotate(0deg)' }, { transform: 'translate(-50%, -50%) rotate(360deg)' }], { duration: 9000, iterations: Infinity });
-  an.playbackRate = 0;
-  let rate = 0, target = 0, boost = 0, raf = 0;
-  const tick = () => {
-    boost *= 0.95; rate += (target + boost - rate) * 0.08; an.playbackRate = rate;   // eases in and out, never jumps
-    if (target || boost > 0.02 || rate > 0.004) raf = requestAnimationFrame(tick); else { raf = 0; an.playbackRate = 0; }
-  };
-  const go = () => { if (!raf) raf = requestAnimationFrame(tick); };
-  btn.addEventListener('pointerenter', () => { target = 1; go(); });
-  btn.addEventListener('pointerleave', () => { target = 0; go(); });
-  btn.addEventListener('focus', () => { target = 1; go(); });
-  btn.addEventListener('blur', () => { target = 0; go(); });
-  btn.addEventListener('click', () => { boost = 6; go(); });
 })();
